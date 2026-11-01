@@ -259,6 +259,29 @@ export interface ConsistencyIssue {
   intentReason?: 'character_lie' | 'unreliable_narrator' | 'myth_legend' | 'artistic_device' | 'alternate_version';
 }
 
+export type TrashItemType =
+  | 'scene'
+  | 'chapter'
+  | 'act'
+  | 'entity'
+  | 'event'
+  | 'question'
+  | 'hypothesis'
+  | 'decision'
+  | 'storyline';
+
+export interface TrashItem {
+  id: string;
+  originalId: string;
+  itemType: TrashItemType;
+  title: string;
+  deletedAt: string;
+  parentTitle?: string;
+  parentId?: string;
+  originalPath?: string; // e.g. "Акт 1 > Глава 1"
+  payload: any;
+}
+
 export interface UniverseData {
   id: string;
   universeName: string;
@@ -273,6 +296,7 @@ export interface UniverseData {
   consistencyIssues: ConsistencyIssue[];
   activeProjectId: string;
   activeSceneId?: string;
+  trash?: TrashItem[];
 }
 
 export type UniverseUpdater = UniverseData | ((prev: UniverseData) => UniverseData);

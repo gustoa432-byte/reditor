@@ -32,3 +32,15 @@
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(225, 29, 72, 0.5);
 }
+
+@utility z-45 {
+  z-index: 45;
+}
+
+@utility z-60 {
+  z-index: 60;
+}
+
+@utility z-70 {
+  z-index: 70;
+}

@@ -163,7 +163,7 @@ export const VisualMapView: React.FC<VisualMapViewProps> = ({
   const selectedEntity = universe.entities.find(e => e.id === selectedNodeId);
 
   return (
-    <div className="flex h-[calc(100vh-57px)] bg-slate-950 overflow-hidden relative">
+    <div className="flex h-full flex-1 min-h-0 bg-slate-950 overflow-hidden relative">
       {/* Top Left Thematic Presets Bar */}
       <div className="absolute top-4 left-4 z-20 flex flex-wrap items-center gap-1.5 bg-slate-900/90 backdrop-blur-md p-1.5 rounded-xl border border-slate-800 shadow-xl max-w-xl">
         <span className="text-[11px] font-mono text-slate-400 px-2 flex items-center gap-1">
@@ -333,6 +333,30 @@ export const VisualMapView: React.FC<VisualMapViewProps> = ({
             })}
           </g>
         </svg>
+
+        {visibleEntities.length === 0 && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center z-10 pointer-events-none">
+            <div className="w-14 h-14 rounded-2xl bg-rose-950/40 border border-rose-800/40 flex items-center justify-center mb-3">
+              <Share2 className="w-7 h-7 text-rose-400" />
+            </div>
+            <h3 className="text-base font-serif font-bold text-slate-200">
+              {universe.entities.length === 0 ? 'Карта вселенной пуста' : 'Нет объектов по выбранному фильтру'}
+            </h3>
+            <p className="text-xs text-slate-400 max-w-sm mt-1 mb-4">
+              {universe.entities.length === 0
+                ? 'Добавьте персонажей, фракции или локации в Базе знаний, чтобы визуализировать паутину взаимосвязей вашего мира.'
+                : 'Попробуйте переключить фильтр на «Все объекты» или добавить связи между сущностями.'}
+            </p>
+            {universe.entities.length === 0 && (
+              <button
+                onClick={() => onNavigate('codex')}
+                className="pointer-events-auto px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold shadow-md transition cursor-pointer"
+              >
+                Перейти в Базу знаний
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Selected Node Details Drawer */}

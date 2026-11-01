@@ -30,60 +30,150 @@ export const QuickCreateModal: React.FC<QuickCreateModalProps> = ({
   if (!isOpen) return null;
 
   const handleCreateScene = () => {
-    const project = universe.projects.find(p => p.id === universe.activeProjectId) || universe.projects[0];
-    if (!project || !project.acts[0]?.chapters[0]) return;
-
-    const targetChapter = project.acts[0].chapters[0];
     const newSceneId = `scene-${Date.now()}`;
-    const newSceneNumber = targetChapter.scenes.length + 1;
-
-    const newScene: Scene = {
-      id: newSceneId,
-      title: `Сцена ${newSceneNumber}. Новая сцена`,
-      order: newSceneNumber,
-      status: 'draft',
-      text: '',
-      wordCount: 0,
-      updatedAt: new Date().toISOString(),
-      revisions: [],
-      passport: {
-        participatingCharacterIds: [],
-        characterGoal: '',
-        conflictObstacle: '',
-        initialState: '',
-        finalState: '',
-        relationshipShift: '',
-        newInformationRevealed: '',
-        dramaticTurn: '',
-        hook: '',
-        sceneFunction: '',
-        storylineIds: [],
-        polarity: 0,
-        epochYear: '2450 г.'
-      }
-    };
 
     onUpdateUniverse(prev => {
+      const timestamp = new Date().toISOString();
+
+      // Case 1: No projects exist at all
+      if (!prev.projects || prev.projects.length === 0) {
+        const projectId = `proj-${Date.now()}`;
+        const newScene: Scene = {
+          id: newSceneId,
+          title: 'Сцена 1. Начало',
+          order: 1,
+          status: 'draft',
+          text: '',
+          wordCount: 0,
+          updatedAt: timestamp,
+          revisions: [],
+          passport: {
+            participatingCharacterIds: [],
+            characterGoal: '',
+            conflictObstacle: '',
+            initialState: '',
+            finalState: '',
+            relationshipShift: '',
+            newInformationRevealed: '',
+            dramaticTurn: '',
+            hook: '',
+            sceneFunction: '',
+            storylineIds: [],
+            polarity: 0,
+            epochYear: ''
+          }
+        };
+
+        const newProject = {
+          id: projectId,
+          title: prev.universeName ? `${prev.universeName}: Книга I` : 'Книга I',
+          synopsis: '',
+          updatedAt: timestamp,
+          storylines: [],
+          acts: [
+            {
+              id: `act-${Date.now()}`,
+              title: 'Часть 1',
+              order: 1,
+              chapters: [
+                {
+                  id: `ch-${Date.now()}`,
+                  title: 'Глава 1',
+                  order: 1,
+                  scenes: [newScene]
+                }
+              ]
+            }
+          ]
+        };
+
+        return {
+          ...prev,
+          projects: [newProject],
+          activeProjectId: projectId,
+          activeSceneId: newSceneId
+        };
+      }
+
+      // Case 2: Existing project
       const activeProj = prev.projects.find(p => p.id === prev.activeProjectId) || prev.projects[0];
+      const targetAct = activeProj.acts?.[0];
+      const targetChapter = targetAct?.chapters?.[0];
+
+      const newSceneNumber = (targetChapter?.scenes?.length || 0) + 1;
+      const newScene: Scene = {
+        id: newSceneId,
+        title: `Сцена ${newSceneNumber}. Новая сцена`,
+        order: newSceneNumber,
+        status: 'draft',
+        text: '',
+        wordCount: 0,
+        updatedAt: timestamp,
+        revisions: [],
+        passport: {
+          participatingCharacterIds: [],
+          characterGoal: '',
+          conflictObstacle: '',
+          initialState: '',
+          finalState: '',
+          relationshipShift: '',
+          newInformationRevealed: '',
+          dramaticTurn: '',
+          hook: '',
+          sceneFunction: '',
+          storylineIds: [],
+          polarity: 0,
+          epochYear: ''
+        }
+      };
+
       const updatedProjects = prev.projects.map(proj => {
         if (proj.id !== activeProj.id) return proj;
+
+        let acts = [...(proj.acts || [])];
+        if (acts.length === 0) {
+          acts = [
+            {
+              id: `act-${Date.now()}`,
+              title: 'Часть 1',
+              order: 1,
+              chapters: []
+            }
+          ];
+        }
+
+        const updatedActs = acts.map((act, aIdx) => {
+          if (aIdx !== 0) return act;
+          let chapters = [...(act.chapters || [])];
+          if (chapters.length === 0) {
+            chapters = [
+              {
+                id: `ch-${Date.now()}`,
+                title: 'Глава 1',
+                order: 1,
+                scenes: []
+              }
+            ];
+          }
+
+          const updatedChapters = chapters.map((ch, cIdx) => {
+            if (cIdx !== 0) return ch;
+            return {
+              ...ch,
+              scenes: [...ch.scenes, newScene]
+            };
+          });
+
+          return { ...act, chapters: updatedChapters };
+        });
+
         return {
           ...proj,
-          acts: proj.acts.map((act, aIdx) => {
-            if (aIdx !== 0) return act;
-            return {
-              ...act,
-              chapters: act.chapters.map((ch, cIdx) => {
-                if (cIdx !== 0) return ch;
-                return {
-                  ...ch,
-                  scenes: [...ch.scenes, newScene]
-                };
-              })
-            };
-          })
+          updatedAt: timestamp,
+          acts: updatedActs
         };
       });
+
       return { ...prev, projects: updatedProjects, activeSceneId: newSceneId };
     });
 

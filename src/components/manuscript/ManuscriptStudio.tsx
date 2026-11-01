@@ -1,31 +1,23 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Chapter,
   ManuscriptProject,
   Scene,
+  SceneRevision,
+  ScenePassport as IScenePassport,
   UniverseData,
   UniverseUpdater,
   WorkspaceTab
 } from '../../types';
 import { ContextInspector } from './ContextInspector';
 import { StorylineMatrix } from './StorylineMatrix';
-import {
-  Feather,
-  Plus,
-  Trash2,
-  Save,
-  Clock,
-  History,
-  Layers,
-  Sliders,
-  ChevronDown,
-  ChevronRight,
-  Maximize2,
-  Minimize2,
-  CheckCircle2,
-  Sparkles,
-  BookOpen
-} from 'lucide-react';
+import { ManuscriptOutline } from './ManuscriptOutline';
+import { SceneHeader } from './SceneHeader';
+import { SceneEditor } from './SceneEditor';
+import { ScenePassport } from './ScenePassport';
+import { RevisionHistory } from './RevisionHistory';
+import { Feather, Plus, Minimize2, X } from 'lucide-react';
+import { softDeleteScene } from '../../utils/universeOps';
 
 interface ManuscriptStudioProps {
   universe: UniverseData;
@@ -33,6 +25,7 @@ interface ManuscriptStudioProps {
   onUpdateUniverse: (updater: UniverseUpdater) => void;
   onNavigate: (tab: WorkspaceTab, targetId?: string) => void;
   onOpenAIAssistant: () => void;
+  onItemDeletedNotice?: (title: string, onUndo: () => void) => void;
 }
 
 export const ManuscriptStudio: React.FC<ManuscriptStudioProps> = ({
@@ -40,11 +33,11 @@ export const ManuscriptStudio: React.FC<ManuscriptStudioProps> = ({
   activeSceneId,
   onUpdateUniverse,
   onNavigate,
-  onOpenAIAssistant
+  onOpenAIAssistant,
+  onItemDeletedNotice
 }) => {
   const project = universe.projects.find(p => p.id === universe.activeProjectId) || universe.projects[0];
 
-  // Selected scene state
   const [selectedSceneId, setSelectedSceneId] = useState<string>(() => {
     if (activeSceneId) return activeSceneId;
     return project?.acts[0]?.chapters[0]?.scenes[0]?.id || '';
@@ -52,9 +45,26 @@ export const ManuscriptStudio: React.FC<ManuscriptStudioProps> = ({
 
   const [activeTab, setActiveTab] = useState<'editor' | 'passport' | 'matrix' | 'history'>('editor');
   const [isFocusMode, setIsFocusMode] = useState<boolean>(false);
+  const [isOutlineOpenMobile, setIsOutlineOpenMobile] = useState<boolean>(false);
   const [showRightInspector, setShowRightInspector] = useState<boolean>(true);
-  const [newRevisionLabel, setNewRevisionLabel] = useState<string>('');
-  const [selectedRevisionId, setSelectedRevisionId] = useState<string | null>(null);
+
+  // Sync external activeSceneId
+  useEffect(() => {
+    if (activeSceneId && activeSceneId !== selectedSceneId) {
+      setSelectedSceneId(activeSceneId);
+    }
+  }, [activeSceneId]);
+
+  // Escape key exits focus mode
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isFocusMode) {
+        setIsFocusMode(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isFocusMode]);
 
   // Find active scene object
   let currentActIndex = 0;
@@ -62,35 +72,47 @@ export const ManuscriptStudio: React.FC<ManuscriptStudioProps> = ({
   let currentSceneIndex = 0;
   let activeScene: Scene | undefined;
 
-  project?.acts.forEach((act, aIdx) => {
-    act.chapters.forEach((ch, cIdx) => {
-      ch.scenes.forEach((sc, sIdx) => {
-        if (sc.id === selectedSceneId) {
-          activeScene = sc;
-          currentActIndex = aIdx;
-          currentChapterIndex = cIdx;
-          currentSceneIndex = sIdx;
+  if (project?.acts) {
+    for (let aIdx = 0; aIdx < project.acts.length; aIdx++) {
+      const act = project.acts[aIdx];
+      for (let cIdx = 0; cIdx < act.chapters.length; cIdx++) {
+        const chap = act.chapters[cIdx];
+        for (let sIdx = 0; sIdx < chap.scenes.length; sIdx++) {
+          const sc = chap.scenes[sIdx];
+          if (sc.id === selectedSceneId) {
+            currentActIndex = aIdx;
+            currentChapterIndex = cIdx;
+            currentSceneIndex = sIdx;
+            activeScene = sc;
+            break;
+          }
         }
-      });
-    });
-  });
-
-  // Fallback to first scene if selected not found
-  if (!activeScene && project?.acts[0]?.chapters[0]?.scenes[0]) {
-    activeScene = project.acts[0].chapters[0].scenes[0];
+        if (activeScene) break;
+      }
+      if (activeScene) break;
+    }
   }
 
-  // Text updater
+  // Fallback to first scene if selected not found
+  if (!activeScene && project?.acts?.[0]?.chapters?.[0]?.scenes?.[0]) {
+    activeScene = project.acts[0].chapters[0].scenes[0];
+    currentActIndex = 0;
+    currentChapterIndex = 0;
+    currentSceneIndex = 0;
+  }
+
+  // Update text with word count calculation
   const handleUpdateText = (newText: string) => {
-    if (!activeScene) return;
-    const words = newText.trim().split(/\s+/).filter(Boolean).length;
-    onUpdateUniverse(prev => {
-      const activeProj = prev.projects.find(p => p.id === prev.activeProjectId) || prev.projects[0];
-      const updatedProjects = prev.projects.map(proj => {
-        if (proj.id !== activeProj.id) return proj;
+    if (!activeScene || !project) return;
+    const words = newText.trim() ? newText.trim().split(/\s+/).length : 0;
+
+    onUpdateUniverse(prev => ({
+      ...prev,
+      projects: prev.projects.map(p => {
+        if (p.id !== project.id) return p;
         return {
-          ...proj,
-          acts: proj.acts.map((act, aIdx) => {
+          ...p,
+          acts: p.acts.map((act, aIdx) => {
             if (aIdx !== currentActIndex) return act;
             return {
               ...act,
@@ -112,21 +134,20 @@ export const ManuscriptStudio: React.FC<ManuscriptStudioProps> = ({
             };
           })
         };
-      });
-      return { ...prev, projects: updatedProjects };
-    });
+      })
+    }));
   };
 
-  // Passport field updater
-  const handleUpdatePassport = (field: keyof Scene['passport'], value: string | number | string[]) => {
-    if (!activeScene) return;
-    onUpdateUniverse(prev => {
-      const activeProj = prev.projects.find(p => p.id === prev.activeProjectId) || prev.projects[0];
-      const updatedProjects = prev.projects.map(proj => {
-        if (proj.id !== activeProj.id) return proj;
+  // Update scene title
+  const handleUpdateTitle = (newTitle: string) => {
+    if (!activeScene || !project) return;
+    onUpdateUniverse(prev => ({
+      ...prev,
+      projects: prev.projects.map(p => {
+        if (p.id !== project.id) return p;
         return {
-          ...proj,
-          acts: proj.acts.map((act, aIdx) => {
+          ...p,
+          acts: p.acts.map((act, aIdx) => {
             if (aIdx !== currentActIndex) return act;
             return {
               ...act,
@@ -136,35 +157,27 @@ export const ManuscriptStudio: React.FC<ManuscriptStudioProps> = ({
                   ...ch,
                   scenes: ch.scenes.map((sc, sIdx) => {
                     if (sIdx !== currentSceneIndex) return sc;
-                    return {
-                      ...sc,
-                      passport: {
-                        ...sc.passport,
-                        [field]: value
-                      },
-                      updatedAt: new Date().toISOString()
-                    };
+                    return { ...sc, title: newTitle };
                   })
                 };
               })
             };
           })
         };
-      });
-      return { ...prev, projects: updatedProjects };
-    });
+      })
+    }));
   };
 
-  // Scene status updater
-  const handleUpdateSceneStatus = (status: Scene['status']) => {
-    if (!activeScene) return;
-    onUpdateUniverse(prev => {
-      const activeProj = prev.projects.find(p => p.id === prev.activeProjectId) || prev.projects[0];
-      const updatedProjects = prev.projects.map(proj => {
-        if (proj.id !== activeProj.id) return proj;
+  // Update scene status
+  const handleUpdateStatus = (status: Scene['status']) => {
+    if (!activeScene || !project) return;
+    onUpdateUniverse(prev => ({
+      ...prev,
+      projects: prev.projects.map(p => {
+        if (p.id !== project.id) return p;
         return {
-          ...proj,
-          acts: proj.acts.map((act, aIdx) => {
+          ...p,
+          acts: p.acts.map((act, aIdx) => {
             if (aIdx !== currentActIndex) return act;
             return {
               ...act,
@@ -181,710 +194,582 @@ export const ManuscriptStudio: React.FC<ManuscriptStudioProps> = ({
             };
           })
         };
-      });
-      return { ...prev, projects: updatedProjects };
-    });
+      })
+    }));
   };
 
-  // Storyline toggle in matrix
-  const handleToggleStoryline = (sceneId: string, storylineId: string) => {
-    const updatedProjects = universe.projects.map(proj => {
-      if (proj.id !== project.id) return proj;
-      return {
-        ...proj,
-        acts: proj.acts.map(act => ({
-          ...act,
-          chapters: act.chapters.map(ch => ({
-            ...ch,
-            scenes: ch.scenes.map(sc => {
-              if (sc.id !== sceneId) return sc;
-              const has = sc.passport.storylineIds.includes(storylineId);
-              return {
-                ...sc,
-                passport: {
-                  ...sc.passport,
-                  storylineIds: has
-                    ? sc.passport.storylineIds.filter(id => id !== storylineId)
-                    : [...sc.passport.storylineIds, storylineId]
-                }
-              };
-            })
-          }))
-        }))
-      };
-    });
-    onUpdateUniverse({ ...universe, projects: updatedProjects });
-  };
-
-  // Add new scene
-  const handleAddScene = (chapterId: string) => {
-    const newSceneId = `scene-${Date.now()}`;
-    const updatedProjects = universe.projects.map(proj => {
-      if (proj.id !== project.id) return proj;
-      return {
-        ...proj,
-        acts: proj.acts.map(act => ({
-          ...act,
-          chapters: act.chapters.map(ch => {
-            if (ch.id !== chapterId) return ch;
-            const newScene: Scene = {
-              id: newSceneId,
-              title: `Сцена ${ch.scenes.length + 1}. Новая сцена`,
-              order: ch.scenes.length + 1,
-              status: 'draft',
-              text: '',
-              wordCount: 0,
-              updatedAt: new Date().toISOString(),
-              revisions: [],
-              passport: {
-                participatingCharacterIds: [],
-                characterGoal: '',
-                conflictObstacle: '',
-                initialState: '',
-                finalState: '',
-                relationshipShift: '',
-                newInformationRevealed: '',
-                dramaticTurn: '',
-                hook: '',
-                sceneFunction: '',
-                storylineIds: [],
-                polarity: 0,
-                epochYear: '2450 г.'
-              }
-            };
+  // Update scene passport fields
+  const handleUpdatePassport = (field: keyof IScenePassport, value: any) => {
+    if (!activeScene || !project) return;
+    onUpdateUniverse(prev => ({
+      ...prev,
+      projects: prev.projects.map(p => {
+        if (p.id !== project.id) return p;
+        return {
+          ...p,
+          acts: p.acts.map((act, aIdx) => {
+            if (aIdx !== currentActIndex) return act;
             return {
-              ...ch,
-              scenes: [...ch.scenes, newScene]
+              ...act,
+              chapters: act.chapters.map((ch, cIdx) => {
+                if (cIdx !== currentChapterIndex) return ch;
+                return {
+                  ...ch,
+                  scenes: ch.scenes.map((sc, sIdx) => {
+                    if (sIdx !== currentSceneIndex) return sc;
+                    return {
+                      ...sc,
+                      passport: {
+                        ...sc.passport,
+                        [field]: value
+                      }
+                    };
+                  })
+                };
+              })
             };
           })
-        }))
-      };
-    });
-
-    onUpdateUniverse({ ...universe, projects: updatedProjects, activeSceneId: newSceneId });
-    setSelectedSceneId(newSceneId);
+        };
+      })
+    }));
   };
 
-  // Add new chapter
-  const handleAddChapter = (actId: string) => {
-    const newChId = `ch-${Date.now()}`;
-    const newSceneId = `scene-${Date.now()}`;
-    const updatedProjects = universe.projects.map(proj => {
-      if (proj.id !== project.id) return proj;
-      return {
-        ...proj,
-        acts: proj.acts.map(act => {
-          if (act.id !== actId) return act;
-          const newCh: Chapter = {
-            id: newChId,
-            title: `Глава ${act.chapters.length + 1}. Новая глава`,
-            order: act.chapters.length + 1,
-            scenes: [
-              {
-                id: newSceneId,
-                title: 'Сцена 1',
-                order: 1,
-                status: 'draft',
-                text: '',
-                wordCount: 0,
-                updatedAt: new Date().toISOString(),
-                revisions: [],
-                passport: {
-                  participatingCharacterIds: [],
-                  characterGoal: '',
-                  conflictObstacle: '',
-                  initialState: '',
-                  finalState: '',
-                  relationshipShift: '',
-                  newInformationRevealed: '',
-                  dramaticTurn: '',
-                  hook: '',
-                  sceneFunction: '',
-                  storylineIds: [],
-                  polarity: 0,
-                  epochYear: '2450 г.'
-                }
-              }
-            ]
-          };
-          return {
-            ...act,
-            chapters: [...act.chapters, newCh]
-          };
-        })
-      };
-    });
-
-    onUpdateUniverse({ ...universe, projects: updatedProjects, activeSceneId: newSceneId });
-    setSelectedSceneId(newSceneId);
-  };
-
-  // Create version snapshot
-  const handleCreateRevision = () => {
-    if (!activeScene || !newRevisionLabel.trim()) return;
-    const revision = {
+  // Create text revision
+  const handleCreateRevision = (label: string) => {
+    if (!activeScene || !project) return;
+    const newRev: SceneRevision = {
       id: `rev-${Date.now()}`,
       timestamp: new Date().toISOString(),
-      label: newRevisionLabel.trim(),
+      label: label.trim(),
       text: activeScene.text
     };
 
-    const updatedProjects = universe.projects.map(proj => {
-      if (proj.id !== project.id) return proj;
-      return {
-        ...proj,
-        acts: proj.acts.map((act, aIdx) => {
-          if (aIdx !== currentActIndex) return act;
-          return {
-            ...act,
-            chapters: act.chapters.map((ch, cIdx) => {
-              if (cIdx !== currentChapterIndex) return ch;
+    onUpdateUniverse(prev => ({
+      ...prev,
+      projects: prev.projects.map(p => {
+        if (p.id !== project.id) return p;
+        return {
+          ...p,
+          acts: p.acts.map((act, aIdx) => {
+            if (aIdx !== currentActIndex) return act;
+            return {
+              ...act,
+              chapters: act.chapters.map((ch, cIdx) => {
+                if (cIdx !== currentChapterIndex) return ch;
+                return {
+                  ...ch,
+                  scenes: ch.scenes.map((sc, sIdx) => {
+                    if (sIdx !== currentSceneIndex) return sc;
+                    return {
+                      ...sc,
+                      revisions: [newRev, ...(sc.revisions || [])]
+                    };
+                  })
+                };
+              })
+            };
+          })
+        };
+      })
+    }));
+  };
+
+  // Restore text revision
+  const handleRestoreRevision = (revision: SceneRevision) => {
+    if (!activeScene || !project) return;
+    // Auto-create snapshot of current state
+    const autoSnapshot: SceneRevision = {
+      id: `rev-${Date.now()}-auto`,
+      timestamp: new Date().toISOString(),
+      label: `Автосохранение перед откатом к «${revision.label}»`,
+      text: activeScene.text
+    };
+
+    handleUpdateText(revision.text);
+
+    onUpdateUniverse(prev => ({
+      ...prev,
+      projects: prev.projects.map(p => {
+        if (p.id !== project.id) return p;
+        return {
+          ...p,
+          acts: p.acts.map((act, aIdx) => {
+            if (aIdx !== currentActIndex) return act;
+            return {
+              ...act,
+              chapters: act.chapters.map((ch, cIdx) => {
+                if (cIdx !== currentChapterIndex) return ch;
+                return {
+                  ...ch,
+                  scenes: ch.scenes.map((sc, sIdx) => {
+                    if (sIdx !== currentSceneIndex) return sc;
+                    return {
+                      ...sc,
+                      revisions: [autoSnapshot, ...(sc.revisions || [])]
+                    };
+                  })
+                };
+              })
+            };
+          })
+        };
+      })
+    }));
+  };
+
+  // Add Chapter
+  const handleAddChapter = (actId: string) => {
+    if (!project) return;
+    const newChapterId = `ch-${Date.now()}`;
+    const newSceneId = `sc-${Date.now()}`;
+
+    const newScene: Scene = {
+      id: newSceneId,
+      title: 'Сцена 1',
+      order: 1,
+      status: 'draft',
+      wordCount: 0,
+      updatedAt: new Date().toISOString(),
+      text: '',
+      revisions: [],
+      passport: {
+        participatingCharacterIds: [],
+        characterGoal: '',
+        conflictObstacle: '',
+        initialState: '',
+        finalState: '',
+        relationshipShift: '',
+        newInformationRevealed: '',
+        dramaticTurn: '',
+        hook: '',
+        sceneFunction: 'Развитие действия',
+        storylineIds: [],
+        polarity: 0
+      }
+    };
+
+    const newChapter: Chapter = {
+      id: newChapterId,
+      title: `Глава ${((project.acts.find(a => a.id === actId)?.chapters.length || 0) + 1)}`,
+      order: (project.acts.find(a => a.id === actId)?.chapters.length || 0) + 1,
+      scenes: [newScene]
+    };
+
+    onUpdateUniverse(prev => ({
+      ...prev,
+      projects: prev.projects.map(p => {
+        if (p.id !== project.id) return p;
+        return {
+          ...p,
+          acts: p.acts.map(act => {
+            if (act.id === actId) {
               return {
-                ...ch,
-                scenes: ch.scenes.map((sc, sIdx) => {
-                  if (sIdx !== currentSceneIndex) return sc;
-                  return {
-                    ...sc,
-                    revisions: [revision, ...sc.revisions]
-                  };
-                })
+                ...act,
+                chapters: [...act.chapters, newChapter]
               };
+            }
+            return act;
+          })
+        };
+      }),
+      activeSceneId: newSceneId
+    }));
+
+    setSelectedSceneId(newSceneId);
+  };
+
+  // Add Scene
+  const handleAddScene = (chapterId: string) => {
+    if (!project) return;
+    const newSceneId = `sc-${Date.now()}`;
+    const targetChapter = project.acts.flatMap(a => a.chapters).find(c => c.id === chapterId);
+    const sceneOrder = (targetChapter?.scenes.length || 0) + 1;
+
+    const newScene: Scene = {
+      id: newSceneId,
+      title: `Сцена ${sceneOrder}`,
+      order: sceneOrder,
+      status: 'draft',
+      wordCount: 0,
+      updatedAt: new Date().toISOString(),
+      text: '',
+      revisions: [],
+      passport: {
+        participatingCharacterIds: [],
+        characterGoal: '',
+        conflictObstacle: '',
+        initialState: '',
+        finalState: '',
+        relationshipShift: '',
+        newInformationRevealed: '',
+        dramaticTurn: '',
+        hook: '',
+        sceneFunction: '',
+        storylineIds: [],
+        polarity: 0
+      }
+    };
+
+    onUpdateUniverse(prev => ({
+      ...prev,
+      projects: prev.projects.map(p => {
+        if (p.id !== project.id) return p;
+        return {
+          ...p,
+          acts: p.acts.map(act => ({
+            ...act,
+            chapters: act.chapters.map(ch => {
+              if (ch.id === chapterId) {
+                return {
+                  ...ch,
+                  scenes: [...ch.scenes, newScene]
+                };
+              }
+              return ch;
             })
-          };
-        })
-      };
+          }))
+        };
+      }),
+      activeSceneId: newSceneId
+    }));
+
+    setSelectedSceneId(newSceneId);
+  };
+
+  // Add Act
+  const handleAddAct = () => {
+    if (!project) return;
+    const newActId = `act-${Date.now()}`;
+    const newChapterId = `ch-${Date.now()}`;
+    const newSceneId = `sc-${Date.now()}`;
+
+    const newScene: Scene = {
+      id: newSceneId,
+      title: 'Сцена 1',
+      order: 1,
+      status: 'draft',
+      wordCount: 0,
+      updatedAt: new Date().toISOString(),
+      text: '',
+      revisions: [],
+      passport: {
+        participatingCharacterIds: [],
+        characterGoal: '',
+        conflictObstacle: '',
+        initialState: '',
+        finalState: '',
+        relationshipShift: '',
+        newInformationRevealed: '',
+        dramaticTurn: '',
+        hook: '',
+        sceneFunction: 'Экспозиция',
+        storylineIds: [],
+        polarity: 0
+      }
+    };
+
+    const newChapter: Chapter = {
+      id: newChapterId,
+      title: 'Глава 1',
+      order: 1,
+      scenes: [newScene]
+    };
+
+    const newAct = {
+      id: newActId,
+      title: `Акт ${project.acts.length + 1}`,
+      order: project.acts.length + 1,
+      chapters: [newChapter]
+    };
+
+    onUpdateUniverse(prev => ({
+      ...prev,
+      projects: prev.projects.map(p => {
+        if (p.id !== project.id) return p;
+        return {
+          ...p,
+          acts: [...p.acts, newAct]
+        };
+      }),
+      activeSceneId: newSceneId
+    }));
+
+    setSelectedSceneId(newSceneId);
+  };
+
+  // Delete scene with soft delete
+  const handleDeleteScene = (sceneId: string, title: string) => {
+    onUpdateUniverse(prev => {
+      const next = softDeleteScene(prev, sceneId);
+      const trashId = next.trash?.[0]?.id;
+      if (trashId && onItemDeletedNotice) {
+        onItemDeletedNotice(title, () => {
+          onUpdateUniverse(u => {
+            const { restoreTrashItem } = require('../../utils/universeOps');
+            return restoreTrashItem(u, trashId);
+          });
+        });
+      }
+      return next;
+    });
+  };
+
+  // Toggle storyline association for active scene
+  const handleToggleStoryline = (sceneId: string, storylineId: string) => {
+    if (!project) return;
+    onUpdateUniverse(prev => ({
+      ...prev,
+      projects: prev.projects.map(p => {
+        if (p.id !== project.id) return p;
+        return {
+          ...p,
+          acts: p.acts.map(act => ({
+            ...act,
+            chapters: act.chapters.map(ch => ({
+              ...ch,
+              scenes: ch.scenes.map(sc => {
+                if (sc.id !== sceneId) return sc;
+                const currentLines = sc.passport.storylineIds || [];
+                const updatedLines = currentLines.includes(storylineId)
+                  ? currentLines.filter(id => id !== storylineId)
+                  : [...currentLines, storylineId];
+                return {
+                  ...sc,
+                  passport: {
+                    ...sc.passport,
+                    storylineIds: updatedLines
+                  }
+                };
+              })
+            }))
+          }))
+        };
+      })
+    }));
+  };
+
+  // First scene creation if empty
+  const handleCreateFirstScene = () => {
+    const newProjId = project?.id || `proj-${Date.now()}`;
+    const newActId = `act-${Date.now()}`;
+    const newChapterId = `ch-${Date.now()}`;
+    const newSceneId = `sc-${Date.now()}`;
+
+    const newScene: Scene = {
+      id: newSceneId,
+      title: 'Пролог: Начало',
+      order: 1,
+      status: 'draft',
+      wordCount: 0,
+      updatedAt: new Date().toISOString(),
+      text: '',
+      revisions: [],
+      passport: {
+        participatingCharacterIds: [],
+        characterGoal: '',
+        conflictObstacle: '',
+        initialState: '',
+        finalState: '',
+        relationshipShift: '',
+        newInformationRevealed: '',
+        dramaticTurn: '',
+        hook: '',
+        sceneFunction: 'Экспозиция',
+        storylineIds: [],
+        polarity: 0
+      }
+    };
+
+    const newChapter: Chapter = {
+      id: newChapterId,
+      title: 'Глава 1: Первые шаги',
+      order: 1,
+      scenes: [newScene]
+    };
+
+    const newAct = {
+      id: newActId,
+      title: 'Акт 1: Завязка',
+      order: 1,
+      chapters: [newChapter]
+    };
+
+    onUpdateUniverse(prev => {
+      const existingProjects = prev.projects.length > 0 ? prev.projects : [];
+      let updated: ManuscriptProject[];
+      if (existingProjects.length === 0) {
+        updated = [{
+          id: newProjId,
+          title: 'Основная рукопись',
+          synopsis: '',
+          acts: [newAct],
+          storylines: [],
+          updatedAt: new Date().toISOString()
+        }];
+      } else {
+        updated = existingProjects.map((p, idx) => {
+          if (idx === 0) return { ...p, acts: [newAct] };
+          return p;
+        });
+      }
+      return { ...prev, projects: updated, activeProjectId: updated[0].id, activeSceneId: newSceneId };
     });
 
-    onUpdateUniverse({ ...universe, projects: updatedProjects });
-    setNewRevisionLabel('');
+    setSelectedSceneId(newSceneId);
   };
 
-  // Restore revision
-  const handleRestoreRevision = (revText: string) => {
-    handleUpdateText(revText);
-    setSelectedRevisionId(null);
-  };
+  if (!project || !project.acts || project.acts.length === 0 || !activeScene) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center p-8 bg-slate-950 text-center h-full min-h-0">
+        <div className="w-14 h-14 rounded-2xl bg-rose-950/40 border border-rose-800/50 flex items-center justify-center mb-4 shadow-xl">
+          <Feather className="w-7 h-7 text-rose-400" />
+        </div>
+        <h2 className="text-xl font-serif font-bold text-slate-100">
+          Мастерская текста пуста
+        </h2>
+        <p className="text-sm text-slate-400 max-w-md mt-2 mb-6 leading-relaxed">
+          В вашей вселенной ещё нет рукописи. Создайте первую главу и сцену, чтобы приступить к литературной работе.
+        </p>
+        <button
+          onClick={handleCreateFirstScene}
+          className="px-5 py-2.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold shadow-lg shadow-rose-950/50 transition cursor-pointer flex items-center gap-2"
+        >
+          <Plus className="w-4 h-4" />
+          <span>Создать первую главу и сцену</span>
+        </button>
+      </div>
+    );
+  }
 
-  // Formatting helpers for writer's editor
-  const insertDialogueDash = () => {
-    if (!activeScene) return;
-    const addition = '\n— ';
-    handleUpdateText(activeScene.text + addition);
-  };
+  // Focus Mode View (Immersive Zen Canvas)
+  if (isFocusMode) {
+    return (
+      <div className="fixed inset-0 z-50 bg-slate-950 text-slate-100 flex flex-col h-screen w-screen overflow-hidden">
+        {/* Floating Top Controls in Focus Mode */}
+        <div className="absolute top-4 right-6 z-10 flex items-center gap-3 bg-slate-900/80 backdrop-blur-md px-3 py-1.5 rounded-full border border-slate-800 shadow-xl">
+          <span className="text-xs font-mono text-slate-400">
+            {activeScene.wordCount || 0} сл.
+          </span>
+          <span className="w-px h-3 bg-slate-700" />
+          <button
+            onClick={() => setIsFocusMode(false)}
+            className="flex items-center gap-1.5 text-xs text-rose-300 hover:text-white font-medium transition cursor-pointer"
+            title="Выйти из режима концентрации (или нажмите Esc)"
+          >
+            <Minimize2 className="w-3.5 h-3.5" />
+            <span>Выйти (Esc)</span>
+          </button>
+        </div>
 
-  const insertHeading = () => {
-    if (!activeScene) return;
-    const addition = '\n### ';
-    handleUpdateText(activeScene.text + addition);
-  };
+        {/* Pure Writing Area */}
+        <div className="flex-1 flex flex-col max-w-3xl mx-auto w-full pt-16 pb-12 px-6 overflow-y-auto scrollbar-thin">
+          <input
+            type="text"
+            value={activeScene.title}
+            onChange={(e) => handleUpdateTitle(e.target.value)}
+            placeholder="Название сцены..."
+            className="bg-transparent font-serif font-bold text-2xl text-slate-200 focus:outline-none mb-6 border-b border-transparent focus:border-rose-900/40 pb-2"
+          />
+          <textarea
+            value={activeScene.text}
+            onChange={(e) => handleUpdateText(e.target.value)}
+            placeholder="Пишите свободно, погрузившись в канон вселенной..."
+            className="w-full flex-1 min-h-[500px] bg-transparent text-slate-200 font-serif text-lg leading-relaxed focus:outline-none resize-none placeholder-slate-600"
+            autoFocus
+          />
+        </div>
+      </div>
+    );
+  }
 
+  // Standard Studio Workspace Layout (Full Height, Flex-1, Zero calc(100vh))
   return (
-    <div className={`flex h-[calc(100vh-57px)] bg-slate-950 overflow-hidden ${isFocusMode ? 'fixed inset-0 z-50 h-screen' : ''}`}>
-      {/* Left Sidebar: Manuscript Outline */}
-      {!isFocusMode && (
-        <aside className="w-64 border-r border-slate-800 bg-slate-950/95 flex flex-col shrink-0">
-          <div className="p-3 border-b border-slate-800 bg-slate-900/60 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <BookOpen className="w-4 h-4 text-rose-400" />
-              <span className="text-xs font-bold text-slate-200 truncate">
-                {project.title}
-              </span>
-            </div>
-            <button
-              onClick={() => handleAddChapter(project.acts[0]?.id)}
-              title="Добавить главу"
-              className="p-1 rounded hover:bg-slate-800 text-slate-300 hover:text-white transition cursor-pointer"
-            >
-              <Plus className="w-3.5 h-3.5" />
-            </button>
-          </div>
+    <div className="flex h-full w-full flex-1 min-h-0 min-w-0 bg-slate-950 overflow-hidden relative">
+      {/* 1. Left Sidebar: Manuscript Outline */}
+      <ManuscriptOutline
+        project={project}
+        activeSceneId={activeScene.id}
+        onSelectScene={id => {
+          setSelectedSceneId(id);
+          onUpdateUniverse(prev => ({ ...prev, activeSceneId: id }));
+        }}
+        onUpdateUniverse={onUpdateUniverse}
+        onAddChapter={handleAddChapter}
+        onAddScene={handleAddScene}
+        onAddAct={handleAddAct}
+        onItemDeletedNotice={onItemDeletedNotice}
+        isOpenMobile={isOutlineOpenMobile}
+        onCloseMobile={() => setIsOutlineOpenMobile(false)}
+      />
 
-          {/* Acts, Chapters, Scenes Tree */}
-          <div className="flex-1 overflow-y-auto p-2 space-y-3 scrollbar-thin">
-            {project.acts.map(act => (
-              <div key={act.id} className="space-y-1.5">
-                <div className="text-[10px] font-mono text-slate-400 uppercase tracking-wider px-2 py-1 flex items-center justify-between">
-                  <span>{act.title}</span>
-                </div>
+      {/* 2. Center Writing & Work Pane */}
+      <main className="flex-1 flex flex-col min-h-0 min-w-0 bg-slate-950 overflow-hidden">
+        {/* Scene Header */}
+        <SceneHeader
+          scene={activeScene}
+          activeTab={activeTab}
+          onSelectTab={setActiveTab}
+          onUpdateTitle={handleUpdateTitle}
+          onUpdateStatus={handleUpdateStatus}
+          onToggleOutlineMobile={() => setIsOutlineOpenMobile(prev => !prev)}
+          onToggleInspector={() => setShowRightInspector(prev => !prev)}
+          showInspector={showRightInspector}
+          onToggleFocusMode={() => setIsFocusMode(true)}
+          onDeleteScene={handleDeleteScene}
+        />
 
-                {act.chapters.map(ch => (
-                  <div key={ch.id} className="space-y-1">
-                    <div className="flex items-center justify-between px-2 py-1 text-xs font-semibold text-slate-300 bg-slate-900/40 rounded border border-slate-800/40">
-                      <span className="truncate">{ch.title}</span>
-                      <button
-                        onClick={() => handleAddScene(ch.id)}
-                        title="Добавить сцену"
-                        className="text-slate-400 hover:text-rose-400 p-0.5 rounded cursor-pointer"
-                      >
-                        <Plus className="w-3 h-3" />
-                      </button>
-                    </div>
-
-                    <div className="pl-2 space-y-0.5">
-                      {ch.scenes.map(sc => {
-                        const isSelected = sc.id === activeScene?.id;
-                        return (
-                          <button
-                            key={sc.id}
-                            onClick={() => {
-                              setSelectedSceneId(sc.id);
-                              onUpdateUniverse({ ...universe, activeSceneId: sc.id });
-                            }}
-                            className={`w-full text-left px-2.5 py-1.5 rounded-md text-xs transition flex items-center justify-between group cursor-pointer ${
-                              isSelected
-                                ? 'bg-rose-950/60 text-rose-200 border border-rose-800/50 font-medium'
-                                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60'
-                            }`}
-                          >
-                            <span className="truncate mr-2">{sc.title}</span>
-                            <span className="text-[10px] font-mono shrink-0 text-slate-400 group-hover:text-slate-400">
-                              {sc.wordCount}
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ))}
-          </div>
-
-          {/* Manuscript Footer Stats */}
-          <div className="p-3 border-t border-slate-800 bg-slate-900/40 text-[11px] font-mono text-slate-400 flex items-center justify-between">
-            <span>Всего слов:</span>
-            <span className="text-slate-200 font-bold">
-              {project.acts.reduce((acc, a) => acc + a.chapters.reduce((cAcc, c) => cAcc + c.scenes.reduce((sAcc, s) => sAcc + s.wordCount, 0), 0), 0).toLocaleString()}
-            </span>
-          </div>
-        </aside>
-      )}
-
-      {/* Center Pane: Editor / Passport / Matrix / History */}
-      <main className="flex-1 flex flex-col min-w-0 bg-slate-950">
-        {/* Top Header of Center Pane */}
-        {activeScene && (
-          <div className="px-4 py-2.5 border-b border-slate-800 bg-slate-900/80 flex items-center justify-between gap-3">
-            <div className="flex items-center gap-3 min-w-0">
-              <input
-                type="text"
-                value={activeScene.title}
-                onChange={e => {
-                  const val = e.target.value;
-                  const updatedProjects = universe.projects.map(proj => {
-                    if (proj.id !== project.id) return proj;
-                    return {
-                      ...proj,
-                      acts: proj.acts.map((act, aIdx) => {
-                        if (aIdx !== currentActIndex) return act;
-                        return {
-                          ...act,
-                          chapters: act.chapters.map((ch, cIdx) => {
-                            if (cIdx !== currentChapterIndex) return ch;
-                            return {
-                              ...ch,
-                              scenes: ch.scenes.map((sc, sIdx) => {
-                                if (sIdx !== currentSceneIndex) return sc;
-                                return { ...sc, title: val };
-                              })
-                            };
-                          })
-                        };
-                      })
-                    };
-                  });
-                  onUpdateUniverse({ ...universe, projects: updatedProjects });
-                }}
-                className="bg-transparent font-serif font-bold text-slate-100 text-sm md:text-base focus:outline-none focus:border-b focus:border-rose-500 border-b border-transparent truncate max-w-sm sm:max-w-md"
-              />
-
-              {/* Status Selector */}
-              <select
-                value={activeScene.status}
-                onChange={e => handleUpdateSceneStatus(e.target.value as any)}
-                className="bg-slate-800 border border-slate-700 text-[11px] font-medium text-slate-200 rounded px-2 py-1 focus:outline-none cursor-pointer"
-              >
-                <option value="draft">Черновик</option>
-                <option value="in_progress">В работе</option>
-                <option value="revised">Вычитано</option>
-                <option value="final">Канонический финал</option>
-              </select>
-            </div>
-
-            {/* View Switcher Tabs */}
-            <div className="flex items-center gap-1 bg-slate-950 p-0.5 rounded-lg border border-slate-800">
-              <button
-                onClick={() => setActiveTab('editor')}
-                className={`px-2.5 py-1 rounded text-xs font-medium transition cursor-pointer ${
-                  activeTab === 'editor'
-                    ? 'bg-rose-900/60 text-rose-200 border border-rose-700/50'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                Текст
-              </button>
-              <button
-                onClick={() => setActiveTab('passport')}
-                className={`px-2.5 py-1 rounded text-xs font-medium transition cursor-pointer ${
-                  activeTab === 'passport'
-                    ? 'bg-rose-900/60 text-rose-200 border border-rose-700/50'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                Паспорт сцены
-              </button>
-              <button
-                onClick={() => setActiveTab('matrix')}
-                className={`px-2.5 py-1 rounded text-xs font-medium transition cursor-pointer ${
-                  activeTab === 'matrix'
-                    ? 'bg-rose-900/60 text-rose-200 border border-rose-700/50'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                Матрица линий
-              </button>
-              <button
-                onClick={() => setActiveTab('history')}
-                className={`px-2.5 py-1 rounded text-xs font-medium transition cursor-pointer ${
-                  activeTab === 'history'
-                    ? 'bg-rose-900/60 text-rose-200 border border-rose-700/50'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                Редакции ({activeScene.revisions.length})
-              </button>
-            </div>
-
-            {/* Controls */}
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setIsFocusMode(!isFocusMode)}
-                title={isFocusMode ? 'Выйти из режима фокуса' : 'Режим концентрации'}
-                className="p-1.5 rounded hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition cursor-pointer"
-              >
-                {isFocusMode ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-              </button>
-              <button
-                onClick={() => setShowRightInspector(!showRightInspector)}
-                title="Переключить контекстный инспектор"
-                className={`p-1.5 rounded text-xs transition cursor-pointer ${
-                  showRightInspector ? 'text-rose-400 bg-rose-950/50' : 'text-slate-400 hover:bg-slate-800'
-                }`}
-              >
-                <Sliders className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Tab 1: Prose Text Editor */}
-        {activeTab === 'editor' && activeScene && (
-          <div className="flex-1 flex flex-col overflow-hidden">
-            {/* Writer's mini toolbar */}
-            <div className="px-6 py-1.5 border-b border-slate-800/80 bg-slate-950 flex items-center justify-between text-xs text-slate-400">
-              <div className="flex items-center gap-1.5">
-                <button
-                  onClick={insertHeading}
-                  className="px-2 py-0.5 rounded hover:bg-slate-800 hover:text-slate-200 font-serif font-bold cursor-pointer"
-                >
-                  H3
-                </button>
-                <button
-                  onClick={insertDialogueDash}
-                  title="Вставить реплику диалога (тире)"
-                  className="px-2 py-0.5 rounded hover:bg-slate-800 hover:text-slate-200 font-mono font-bold cursor-pointer"
-                >
-                  — Диалог
-                </button>
-                <span className="w-px h-3.5 bg-slate-800 mx-1" />
-                <span className="text-[11px] font-mono text-slate-400">
-                  {activeScene.wordCount} слов · ~{Math.max(1, Math.round(activeScene.wordCount / 200))} мин.
-                </span>
-              </div>
-              <div className="flex items-center gap-2 text-[11px] text-slate-400 font-mono">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
-                <span>Автосохранение активно</span>
-              </div>
-            </div>
-
-            {/* Prose Textarea */}
-            <div className="flex-1 p-6 md:p-10 overflow-y-auto scrollbar-thin max-w-4xl mx-auto w-full">
-              <textarea
-                value={activeScene.text}
-                onChange={e => handleUpdateText(e.target.value)}
-                placeholder="Начните писать сцену здесь... Описывайте действия, диалоги и чувственный опыт персонажей..."
-                className="w-full h-full min-h-[500px] bg-transparent text-slate-200 font-serif text-base md:text-lg leading-relaxed focus:outline-none resize-none placeholder-slate-400"
-              />
-            </div>
-          </div>
-        )}
-
-        {/* Tab 2: Scene Passport */}
-        {activeTab === 'passport' && activeScene && (
-          <div className="flex-1 overflow-y-auto p-6 max-w-4xl mx-auto w-full space-y-6">
-            <div className="border-b border-slate-800 pb-3">
-              <h2 className="text-lg font-serif font-bold text-slate-100">
-                Паспорт сцены: {activeScene.title}
-              </h2>
-              <p className="text-xs text-slate-400 mt-1">
-                Необязательная драматургическая анкета. Заполняйте только те поля, которые помогают удерживать замысел.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* POV Character */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-300">Точка зрения (POV):</label>
-                <select
-                  value={activeScene.passport.povCharacterId || ''}
-                  onChange={e => handleUpdatePassport('povCharacterId', e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-700 text-xs text-slate-200 rounded-lg p-2.5 focus:outline-none focus:border-rose-500"
-                >
-                  <option value="">-- Выбрать персонажа --</option>
-                  {universe.entities.filter(e => e.type === 'character').map(c => (
-                    <option key={c.id} value={c.id}>{c.title}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Location */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-300">Место действия (Локация):</label>
-                <select
-                  value={activeScene.passport.locationId || ''}
-                  onChange={e => handleUpdatePassport('locationId', e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-700 text-xs text-slate-200 rounded-lg p-2.5 focus:outline-none focus:border-rose-500"
-                >
-                  <option value="">-- Выбрать локацию --</option>
-                  {universe.entities.filter(e => e.type === 'location' || e.type === 'organization').map(l => (
-                    <option key={l.id} value={l.id}>{l.title}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Epoch / Year */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-300">Эпоха / Временная привязка:</label>
-                <input
-                  type="text"
-                  value={activeScene.passport.epochYear || ''}
-                  onChange={e => handleUpdatePassport('epochYear', e.target.value)}
-                  placeholder="Например: 2450 г. (Эпоха Катастрофы)"
-                  className="w-full bg-slate-900 border border-slate-700 text-xs text-slate-200 rounded-lg p-2.5 focus:outline-none focus:border-rose-500"
-                />
-              </div>
-
-              {/* Polarity Slider */}
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-semibold text-slate-300">Драматургическая полярность (+/-):</label>
-                  <span className={`text-xs font-mono font-bold ${
-                    activeScene.passport.polarity > 0 ? 'text-emerald-400' : activeScene.passport.polarity < 0 ? 'text-rose-400' : 'text-slate-400'
-                  }`}>
-                    {activeScene.passport.polarity > 0 ? `+${activeScene.passport.polarity}` : activeScene.passport.polarity}
-                  </span>
-                </div>
-                <input
-                  type="range"
-                  min="-2"
-                  max="2"
-                  step="1"
-                  value={activeScene.passport.polarity}
-                  onChange={e => handleUpdatePassport('polarity', parseInt(e.target.value, 10))}
-                  className="w-full accent-rose-500"
-                />
-                <div className="flex justify-between text-[10px] text-slate-400 font-mono">
-                  <span>-2 (Крах)</span>
-                  <span>-1</span>
-                  <span>0 (Баланс)</span>
-                  <span>+1</span>
-                  <span>+2 (Триумф)</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Narrative & Dramatic Core Fields */}
-            <div className="space-y-4">
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-300">Цель персонажа в сцене:</label>
-                <input
-                  type="text"
-                  value={activeScene.passport.characterGoal}
-                  onChange={e => handleUpdatePassport('characterGoal', e.target.value)}
-                  placeholder="Чего конкретно хочет достичь герой в первой трети сцены?"
-                  className="w-full bg-slate-900 border border-slate-700 text-xs text-slate-200 rounded-lg p-2.5 focus:outline-none focus:border-rose-500"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-300">Конфликт / Препятствие:</label>
-                <input
-                  type="text"
-                  value={activeScene.passport.conflictObstacle}
-                  onChange={e => handleUpdatePassport('conflictObstacle', e.target.value)}
-                  placeholder="Что или кто встает на пути героя (внутреннее или внешнее сопротивление)?"
-                  className="w-full bg-slate-900 border border-slate-700 text-xs text-slate-200 rounded-lg p-2.5 focus:outline-none focus:border-rose-500"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-300">Исходное состояние:</label>
-                  <textarea
-                    rows={2}
-                    value={activeScene.passport.initialState}
-                    onChange={e => handleUpdatePassport('initialState', e.target.value)}
-                    placeholder="В каком физическом/эмоциональном состоянии герой начинает сцену?"
-                    className="w-full bg-slate-900 border border-slate-700 text-xs text-slate-200 rounded-lg p-2.5 focus:outline-none focus:border-rose-500 resize-none"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-300">Итоговое состояние:</label>
-                  <textarea
-                    rows={2}
-                    value={activeScene.passport.finalState}
-                    onChange={e => handleUpdatePassport('finalState', e.target.value)}
-                    placeholder="С каким сдвигом герой завершает сцену?"
-                    className="w-full bg-slate-900 border border-slate-700 text-xs text-slate-200 rounded-lg p-2.5 focus:outline-none focus:border-rose-500 resize-none"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-300">Драматургический поворот:</label>
-                  <input
-                    type="text"
-                    value={activeScene.passport.dramaticTurn}
-                    onChange={e => handleUpdatePassport('dramaticTurn', e.target.value)}
-                    placeholder="Неожиданное открытие, срыв плана или откровение"
-                    className="w-full bg-slate-900 border border-slate-700 text-xs text-slate-200 rounded-lg p-2.5 focus:outline-none focus:border-rose-500"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-300">Сюжетный крючок (Клиффхэнгер):</label>
-                  <input
-                    type="text"
-                    value={activeScene.passport.hook}
-                    onChange={e => handleUpdatePassport('hook', e.target.value)}
-                    placeholder="Вопрос или угроза, заставляющая перевернуть страницу"
-                    className="w-full bg-slate-900 border border-slate-700 text-xs text-slate-200 rounded-lg p-2.5 focus:outline-none focus:border-rose-500"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-300">Функция сцены в произведении:</label>
-                <input
-                  type="text"
-                  value={activeScene.passport.sceneFunction}
-                  onChange={e => handleUpdatePassport('sceneFunction', e.target.value)}
-                  placeholder="Экспозиция, завязка, эскалация, кульминация, развязка..."
-                  className="w-full bg-slate-900 border border-slate-700 text-xs text-slate-200 rounded-lg p-2.5 focus:outline-none focus:border-rose-500"
-                />
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Tab 3: Storyline Matrix */}
-        {activeTab === 'matrix' && (
-          <div className="flex-1 overflow-y-auto">
-            <StorylineMatrix
-              project={project}
-              universe={universe}
-              activeSceneId={activeScene?.id || ''}
-              onSelectScene={id => {
-                setSelectedSceneId(id);
-                onUpdateUniverse({ ...universe, activeSceneId: id });
-              }}
-              onToggleStorylineForScene={handleToggleStoryline}
+        {/* Center Content Body */}
+        <div className="flex-1 flex flex-col min-h-0 overflow-hidden relative">
+          {activeTab === 'editor' && (
+            <SceneEditor
+              scene={activeScene}
+              onUpdateText={handleUpdateText}
             />
-          </div>
-        )}
+          )}
 
-        {/* Tab 4: Revisions & History */}
-        {activeTab === 'history' && activeScene && (
-          <div className="flex-1 overflow-y-auto p-6 max-w-4xl mx-auto w-full space-y-6">
-            <div className="border-b border-slate-800 pb-3 flex items-center justify-between">
-              <div>
-                <h2 className="text-lg font-serif font-bold text-slate-100">
-                  История редакций и контрольные снимки
-                </h2>
-                <p className="text-xs text-slate-400 mt-1">
-                  Сохранение контрольных версий текста, сравнение и откат к предыдущим состояниям.
-                </p>
-              </div>
-            </div>
+          {activeTab === 'passport' && (
+            <ScenePassport
+              scene={activeScene}
+              universe={universe}
+              onUpdatePassport={handleUpdatePassport}
+            />
+          )}
 
-            {/* Create new snapshot */}
-            <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800 flex flex-col sm:flex-row items-center gap-3">
-              <input
-                type="text"
-                value={newRevisionLabel}
-                onChange={e => setNewRevisionLabel(e.target.value)}
-                placeholder="Название снимка (напр., 'Перед сокращением диалога')..."
-                className="w-full bg-slate-950 border border-slate-700 text-xs text-slate-200 rounded-lg p-2.5 focus:outline-none focus:border-rose-500"
+          {activeTab === 'matrix' && (
+            <div className="flex-1 overflow-y-auto min-h-0">
+              <StorylineMatrix
+                project={project}
+                universe={universe}
+                activeSceneId={activeScene.id}
+                onSelectScene={id => {
+                  setSelectedSceneId(id);
+                  onUpdateUniverse(prev => ({ ...prev, activeSceneId: id }));
+                }}
+                onToggleStorylineForScene={handleToggleStoryline}
               />
-              <button
-                onClick={handleCreateRevision}
-                disabled={!newRevisionLabel.trim()}
-                className="w-full sm:w-auto px-4 py-2.5 rounded-lg bg-rose-600 hover:bg-rose-500 disabled:opacity-50 text-white text-xs font-semibold shrink-0 cursor-pointer transition"
-              >
-                Сохранить снимок
-              </button>
             </div>
+          )}
 
-            {/* Revision List */}
-            <div className="space-y-3">
-              {activeScene.revisions.length === 0 ? (
-                <div className="p-8 text-center border border-dashed border-slate-800 rounded-xl text-xs text-slate-400">
-                  Нет сохраненных контрольных снимков. Вы можете зафиксировать текущее состояние текста перед масштабной редактурой.
-                </div>
-              ) : (
-                activeScene.revisions.map(rev => (
-                  <div
-                    key={rev.id}
-                    className="p-4 rounded-xl bg-slate-900/80 border border-slate-800 space-y-2"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <History className="w-4 h-4 text-rose-400" />
-                        <span className="text-xs font-bold text-slate-200">{rev.label}</span>
-                      </div>
-                      <span className="text-[10px] font-mono text-slate-400">
-                        {new Date(rev.timestamp).toLocaleString()}
-                      </span>
-                    </div>
-
-                    <div className="p-3 rounded bg-slate-950/70 border border-slate-800/80 text-xs text-slate-300 font-serif leading-relaxed line-clamp-3">
-                      {rev.text}
-                    </div>
-
-                    <div className="flex justify-end gap-2 pt-1">
-                      <button
-                        onClick={() => handleRestoreRevision(rev.text)}
-                        className="px-3 py-1 rounded bg-slate-800 hover:bg-rose-950 hover:text-rose-200 border border-slate-700 text-xs text-slate-300 transition cursor-pointer"
-                      >
-                        Восстановить этот текст
-                      </button>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        )}
+          {activeTab === 'history' && (
+            <RevisionHistory
+              scene={activeScene}
+              onCreateRevision={handleCreateRevision}
+              onRestoreRevision={handleRestoreRevision}
+            />
+          )}
+        </div>
       </main>
 
-      {/* Right Sidebar: Context Inspector */}
-      {!isFocusMode && showRightInspector && activeScene && (
-        <ContextInspector
-          scene={activeScene}
-          universe={universe}
-          onNavigate={onNavigate}
-          onOpenAIAssistant={onOpenAIAssistant}
-        />
+      {/* 3. Right Sidebar: Context Inspector */}
+      {showRightInspector && (
+        <aside className="hidden xl:flex w-80 border-l border-slate-800 bg-slate-950 flex-col shrink-0 min-h-0 h-full overflow-hidden">
+          <ContextInspector
+            scene={activeScene}
+            universe={universe}
+            onNavigate={onNavigate}
+            onOpenAIAssistant={onOpenAIAssistant}
+          />
+        </aside>
       )}
     </div>
   );

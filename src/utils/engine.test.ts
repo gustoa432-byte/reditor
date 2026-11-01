@@ -44,34 +44,63 @@ test('runConsistencyCheck preserves intentional author annotations and identifie
   assert.equal(issue2.intentReason, 'character_lie');
 });
 
-test('migrateAndValidateUniverse preserves partial data and unpacks wrapped exports', async () => {
+test('createEmptyUniverse creates a clean slate with zero demo entities or events', async () => {
+  const { createEmptyUniverse } = await import('./storage');
+
+  const emptyWorld = createEmptyUniverse('Сага о Стальной Долине', 'Хроники горных кланов');
+  assert.equal(emptyWorld.universeName, 'Сага о Стальной Долине');
+  assert.equal(emptyWorld.tagline, 'Хроники горных кланов');
+
+  // Verify minimal manuscript structure exists
+  assert.equal(emptyWorld.projects.length, 1);
+  const proj = emptyWorld.projects[0];
+  assert.equal(proj.acts.length, 1);
+  assert.equal(proj.acts[0].chapters.length, 1);
+  assert.equal(proj.acts[0].chapters[0].scenes.length, 1);
+  const scene = proj.acts[0].chapters[0].scenes[0];
+  assert.equal(scene.status, 'draft');
+  assert.equal(scene.text, '');
+  assert.equal(emptyWorld.activeProjectId, proj.id);
+  assert.equal(emptyWorld.activeSceneId, scene.id);
+
+  // CRITICAL: Verify ZERO demo entities, events, or hypotheses leak into the new universe
+  assert.deepEqual(emptyWorld.entities, []);
+  assert.deepEqual(emptyWorld.events, []);
+  assert.deepEqual(emptyWorld.questions, []);
+  assert.deepEqual(emptyWorld.hypotheses, []);
+  assert.deepEqual(emptyWorld.decisions, []);
+  assert.deepEqual(emptyWorld.consistencyIssues, []);
+});
+
+test('migrateAndValidateUniverse strictly preserves user empty arrays without demo leakage', async () => {
   const { migrateAndValidateUniverse } = await import('./storage');
 
-  // Test 1: Wrapped export unpacks cleanly
-  const wrapped = {
+  // An author's universe with intentionally empty codex and events
+  const customEmpty = {
     schemaVersion: 3,
-    exportedAt: '2026-11-01T00:00:00Z',
     data: {
-      id: 'custom-universe',
-      universeName: 'CUSTOM_WORLD',
-      entities: [{ id: 'ent-1', title: 'Custom Entity', type: 'character' }],
-      projects: [{ id: 'p-1', title: 'Custom Novel', acts: [] }]
+      id: 'author-custom-empty-world',
+      universeName: 'Мир Магии',
+      entities: [], // Explicitly empty
+      events: [],   // Explicitly empty
+      questions: [],
+      projects: [{
+        id: 'proj-1',
+        title: 'Первая Книга',
+        synopsis: '',
+        genre: 'Фэнтези',
+        storylines: [],
+        acts: []
+      }]
     }
   };
-  const unpacked = migrateAndValidateUniverse(wrapped);
-  assert.equal(unpacked.id, 'custom-universe');
-  assert.equal(unpacked.universeName, 'CUSTOM_WORLD');
-  assert.equal(unpacked.entities.length, 1);
-  assert.ok(Array.isArray(unpacked.hypotheses), 'Missing arrays should be defaulted');
 
-  // Test 2: Incomplete raw object merges missing arrays instead of crashing or wiping
-  const partial = {
-    id: 'partial-world',
-    projects: initialUniverseData.projects
-  };
-  const restored = migrateAndValidateUniverse(partial);
-  assert.equal(restored.id, 'partial-world');
-  assert.ok(Array.isArray(restored.entities));
-  assert.ok(Array.isArray(restored.events));
+  const validated = migrateAndValidateUniverse(customEmpty);
+  assert.equal(validated.universeName, 'Мир Магии');
+  assert.equal(validated.entities.length, 0, 'Entities array must remain empty');
+  assert.equal(validated.events.length, 0, 'Events array must remain empty');
+  assert.equal(validated.questions.length, 0, 'Questions array must remain empty');
+  assert.equal(validated.projects.length, 1);
+  assert.equal(validated.projects[0].title, 'Первая Книга');
 });
 

@@ -14,6 +14,8 @@ import { VisualMapView } from './components/graph/VisualMapView';
 import { ConsistencyAuditorView } from './components/audit/ConsistencyAuditorView';
 import { AIAssistantView } from './components/ai/AIAssistantView';
 import { ExportModal } from './components/export/ExportModal';
+import { TrashModal } from './components/trash/TrashModal';
+import { ToastNotice } from './components/common/ToastNotice';
 import { AlertTriangle, Download, X } from 'lucide-react';
 
 export default function App() {
@@ -22,8 +24,13 @@ export default function App() {
   const [activeTargetId, setActiveTargetId] = useState<string | undefined>();
   const [searchOpen, setSearchOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
+  const [trashOpen, setTrashOpen] = useState(false);
   const [quickCreateOpen, setQuickCreateOpen] = useState(false);
   const [quotaWarning, setQuotaWarning] = useState<string | null>(null);
+  const [toastNotice, setToastNotice] = useState<{
+    message: string;
+    action?: { label: string; onClick: () => void };
+  } | null>(null);
 
   // Listen for storage quota warnings
   useEffect(() => {
@@ -57,12 +64,22 @@ export default function App() {
     }
   };
 
+  const showItemDeletedNotice = (title: string, onUndo: () => void) => {
+    setToastNotice({
+      message: `«${title}» перемещен(а) в корзину`,
+      action: {
+        label: 'Отменить',
+        onClick: onUndo
+      }
+    });
+  };
+
   return (
     <ErrorBoundary>
-      <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-rose-900/40 selection:text-white">
+      <div className="h-screen flex flex-col overflow-hidden bg-slate-950 text-slate-100 font-sans selection:bg-rose-900/40 selection:text-white">
         {/* Storage Quota Alert Banner */}
         {quotaWarning && (
-          <div className="bg-amber-950/90 border-b border-amber-800 text-amber-200 px-4 py-2 text-xs flex items-center justify-between gap-3">
+          <div className="bg-amber-950/90 border-b border-amber-800 text-amber-200 px-4 py-2 text-xs flex items-center justify-between gap-3 shrink-0 z-70">
             <div className="flex items-center gap-2">
               <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
               <span>{quotaWarning}</span>
@@ -76,7 +93,7 @@ export default function App() {
               </button>
               <button
                 onClick={() => setQuotaWarning(null)}
-                className="p-1 hover:text-white"
+                className="p-1 hover:text-white cursor-pointer"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -94,17 +111,20 @@ export default function App() {
           universe={universe}
           onOpenSearch={() => setSearchOpen(true)}
           onOpenExport={() => setExportOpen(true)}
+          onOpenTrash={() => setTrashOpen(true)}
           onQuickCreate={() => setQuickCreateOpen(true)}
         />
 
         {/* Main Workspace View Switcher */}
-        <main className="flex-1 min-h-0 overflow-y-auto">
+        <main className="flex-1 min-h-0 overflow-hidden relative">
           {currentTab === 'dashboard' && (
-            <DashboardView
-              universe={universe}
-              onNavigate={handleNavigate}
-              onQuickCreate={() => setQuickCreateOpen(true)}
-            />
+            <div className="h-full overflow-y-auto">
+              <DashboardView
+                universe={universe}
+                onNavigate={handleNavigate}
+                onQuickCreate={() => setQuickCreateOpen(true)}
+              />
+            </div>
           )}
 
           {currentTab === 'manuscript' && (
@@ -114,6 +134,7 @@ export default function App() {
               onUpdateUniverse={handleUpdateUniverse}
               onNavigate={handleNavigate}
               onOpenAIAssistant={() => setCurrentTab('ai')}
+              onItemDeletedNotice={showItemDeletedNotice}
             />
           )}
 
@@ -123,6 +144,7 @@ export default function App() {
               initialSelectedEntityId={activeTargetId}
               onUpdateUniverse={handleUpdateUniverse}
               onNavigate={handleNavigate}
+              onItemDeletedNotice={showItemDeletedNotice}
             />
           )}
 
@@ -151,18 +173,22 @@ export default function App() {
           )}
 
           {currentTab === 'audit' && (
-            <ConsistencyAuditorView
-              universe={universe}
-              onUpdateUniverse={handleUpdateUniverse}
-              onNavigate={handleNavigate}
-            />
+            <div className="h-full overflow-y-auto">
+              <ConsistencyAuditorView
+                universe={universe}
+                onUpdateUniverse={handleUpdateUniverse}
+                onNavigate={handleNavigate}
+              />
+            </div>
           )}
 
           {currentTab === 'ai' && (
-            <AIAssistantView
-              universe={universe}
-              onNavigate={handleNavigate}
-            />
+            <div className="h-full overflow-y-auto">
+              <AIAssistantView
+                universe={universe}
+                onNavigate={handleNavigate}
+              />
+            </div>
           )}
         </main>
 
@@ -189,6 +215,21 @@ export default function App() {
           onClose={() => setExportOpen(false)}
           universe={universe}
           onRestoreUniverse={handleUpdateUniverse}
+        />
+
+        {/* Universe Trash Bin Modal */}
+        <TrashModal
+          isOpen={trashOpen}
+          onClose={() => setTrashOpen(false)}
+          universe={universe}
+          onUpdateUniverse={handleUpdateUniverse}
+        />
+
+        {/* Toast Notice for Undo / Deletions */}
+        <ToastNotice
+          message={toastNotice?.message || null}
+          action={toastNotice?.action}
+          onDismiss={() => setToastNotice(null)}
         />
       </div>
     </ErrorBoundary>

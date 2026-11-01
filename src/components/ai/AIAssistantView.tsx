@@ -38,13 +38,13 @@ export const AIAssistantView: React.FC<AIAssistantViewProps> = ({
 
   // Ripple Effect state
   const [rippleQuestion, setRippleQuestion] = useState(
-    'Что изменится в мире, если я изменю природу Осколков и сделаю их органическими паразитами Создателей?'
+    'Что изменится в сюжете и расстановке сил, если ключевой артефакт попадет в руки главного антагониста?'
   );
   const [rippleResult, setRippleResult] = useState<{ text: string; isFallback: boolean } | null>(null);
 
   // Grounded Query state
   const [universeQuery, setUniverseQuery] = useState(
-    'Что именно Фелиция помнит о Катастрофе 2450 года и какие знания от неё скрыты?'
+    'Кто из персонажей обладает информацией о происхождении центрального конфликта?'
   );
   const [queryResult, setQueryResult] = useState<{ text: string; isFallback: boolean } | null>(null);
 
@@ -174,7 +174,7 @@ export const AIAssistantView: React.FC<AIAssistantViewProps> = ({
           <div className="flex items-center gap-2">
             <Sparkles className="w-5 h-5 text-purple-400" />
             <h1 className="text-xl md:text-2xl font-serif font-bold text-slate-100">
-              ИИ-Ассистент и редактор REDCROW 3000
+              ИИ-Ассистент: {universe.universeName || 'Редактор канона'}
             </h1>
           </div>
           <p className="text-xs text-slate-400 mt-1">
@@ -244,35 +244,55 @@ export const AIAssistantView: React.FC<AIAssistantViewProps> = ({
       {/* Tab 1: Scene Dramaturgical Critique */}
       {activeTab === 'critique' && (
         <div className="space-y-4">
-          <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-800 space-y-3">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div>
-                <label className="text-xs font-semibold text-slate-300 block mb-1">
-                  Выберите сцену для редакторского разбора:
-                </label>
-                <select
-                  value={selectedSceneId}
-                  onChange={e => setSelectedSceneId(e.target.value)}
-                  className="bg-slate-950 border border-slate-700 text-xs text-slate-200 rounded-lg p-2.5 focus:outline-none focus:border-rose-500 min-w-72"
-                >
-                  {allScenes.map(sc => (
-                    <option key={sc.id} value={sc.id}>
-                      {sc.title} ({sc.wordCount} сл.)
-                    </option>
-                  ))}
-                </select>
+          {allScenes.length === 0 ? (
+            <div className="p-8 rounded-xl bg-slate-900/60 border border-slate-800 text-center space-y-3">
+              <div className="w-12 h-12 rounded-xl bg-rose-950/40 border border-rose-800/40 flex items-center justify-center mx-auto text-rose-400">
+                <Feather className="w-6 h-6" />
               </div>
-
+              <h3 className="text-sm font-serif font-bold text-slate-200">
+                В рукописи пока нет сцен
+              </h3>
+              <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                Создайте первую главу и сцену в Мастерской текста, чтобы запустить глубокий драматургический анализ.
+              </p>
               <button
-                onClick={handleRunCritique}
-                disabled={loading}
-                className="px-5 py-2.5 rounded-lg bg-rose-600 hover:bg-rose-500 disabled:opacity-50 text-white text-xs font-semibold flex items-center justify-center gap-2 transition cursor-pointer shadow-lg shadow-rose-950/40"
+                onClick={() => onNavigate('manuscript')}
+                className="px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold shadow-md transition cursor-pointer"
               >
-                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-                <span>Провести глубокий анализ</span>
+                Перейти в Мастерскую текста
               </button>
             </div>
-          </div>
+          ) : (
+            <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-800 space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-slate-300 block mb-1">
+                    Выберите сцену для редакторского разбора:
+                  </label>
+                  <select
+                    value={selectedSceneId}
+                    onChange={e => setSelectedSceneId(e.target.value)}
+                    className="bg-slate-950 border border-slate-700 text-xs text-slate-200 rounded-lg p-2.5 focus:outline-none focus:border-rose-500 min-w-72"
+                  >
+                    {allScenes.map(sc => (
+                      <option key={sc.id} value={sc.id}>
+                        {sc.title} ({sc.wordCount} сл.)
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <button
+                  onClick={handleRunCritique}
+                  disabled={loading}
+                  className="px-5 py-2.5 rounded-lg bg-rose-600 hover:bg-rose-500 disabled:opacity-50 text-white text-xs font-semibold flex items-center justify-center gap-2 transition cursor-pointer shadow-lg shadow-rose-950/40"
+                >
+                  {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                  <span>Провести глубокий анализ</span>
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Results Display */}
           {critiqueResult && (
@@ -320,7 +340,7 @@ export const AIAssistantView: React.FC<AIAssistantViewProps> = ({
                 type="text"
                 value={rippleQuestion}
                 onChange={e => setRippleQuestion(e.target.value)}
-                placeholder="Что изменится, если я изменю дату Катастрофы или мотивацию Маркуса?.."
+                placeholder="Что изменится, если изменить происхождение артефакта или мотивацию героя?..."
                 className="w-full bg-slate-950 border border-slate-700 text-xs text-slate-200 rounded-lg p-2.5 focus:outline-none focus:border-purple-500"
               />
               <button
@@ -331,6 +351,25 @@ export const AIAssistantView: React.FC<AIAssistantViewProps> = ({
                 {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <GitBranch className="w-4 h-4" />}
                 <span>Смоделировать каскад</span>
               </button>
+            </div>
+
+            {/* Quick chips */}
+            <div className="flex flex-wrap items-center gap-1.5 pt-1">
+              <span className="text-[10px] font-mono text-slate-400">Быстрые примеры:</span>
+              {[
+                'Что изменится, если тайный союз между фракциями станет явным?',
+                'Что изменится, если древний источник силы будет разрушен в прологе?',
+                'Что произойдет, если перенести начало восстания на 5 лет раньше?'
+              ].map((chip, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => setRippleQuestion(chip)}
+                  className="text-[11px] px-2 py-0.5 rounded bg-slate-950/80 hover:bg-purple-950 text-slate-300 hover:text-purple-200 border border-slate-800 hover:border-purple-800 transition cursor-pointer"
+                >
+                  {chip.slice(0, 38)}...
+                </button>
+              ))}
             </div>
           </div>
 
@@ -389,6 +428,25 @@ export const AIAssistantView: React.FC<AIAssistantViewProps> = ({
                 {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
                 <span>Найти в каноне</span>
               </button>
+            </div>
+
+            {/* Quick chips */}
+            <div className="flex flex-wrap items-center gap-1.5 pt-1">
+              <span className="text-[10px] font-mono text-slate-400">Быстрые примеры:</span>
+              {[
+                'Кто из персонажей скрывает истинные знания от других?',
+                'Какие локации или артефакты связаны с центральным конфликтом?',
+                'Какие события хронологии определяют начало текущей эпохи?'
+              ].map((chip, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => setUniverseQuery(chip)}
+                  className="text-[11px] px-2 py-0.5 rounded bg-slate-950/80 hover:bg-cyan-950 text-slate-300 hover:text-cyan-200 border border-slate-800 hover:border-cyan-800 transition cursor-pointer"
+                >
+                  {chip.slice(0, 38)}...
+                </button>
+              ))}
             </div>
           </div>
 

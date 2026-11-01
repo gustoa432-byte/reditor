@@ -45,7 +45,7 @@ export class ErrorBoundary extends Component<Props, State> {
 
             <div className="space-y-2">
               <h1 className="text-xl font-serif font-bold text-slate-100">
-                Защитный контур REDCROW 3000
+                Защитный контур авторской среды
               </h1>
               <p className="text-xs text-slate-300 leading-relaxed">
                 Произошла непредвиденная ошибка в интерфейсе. Ваши сохраненные данные канона и рукописи находятся в безопасности в локальном хранилище.

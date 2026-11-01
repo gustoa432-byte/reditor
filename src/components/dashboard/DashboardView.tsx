@@ -59,22 +59,28 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         <div className="relative z-10 max-w-3xl space-y-3">
           <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-rose-950/80 border border-rose-700/50 text-[11px] font-mono text-rose-300">
             <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" />
-            Среда управления каноном REDCROW 3000
+            Среда управления каноном: {universe.universeName || 'REDCROW 3000'}
           </div>
           <h1 className="text-2xl md:text-3xl font-serif font-bold text-slate-100 tracking-tight">
             Рабочая панель автора вселенной
           </h1>
           <p className="text-sm text-slate-300 leading-relaxed">
-            {universe.tagline}. Одновременное развитие масштаба тысячелетней истории мира, структуры художественных произведений и логики авторских решений.
+            {universe.tagline || 'Авторская среда разработки канона'}. Одновременное развитие масштаба истории мира, структуры художественных произведений и логики авторских решений.
           </p>
 
           <div className="flex flex-wrap items-center gap-3 pt-2">
             <button
-              onClick={() => onNavigate('manuscript', activeScene?.id)}
+              onClick={() => {
+                if (activeScene) {
+                  onNavigate('manuscript', activeScene.id);
+                } else {
+                  onNavigate('manuscript');
+                }
+              }}
               className="flex items-center gap-2 px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold shadow-lg shadow-rose-950/50 transition cursor-pointer"
             >
               <Feather className="w-4 h-4" />
-              <span>Продолжить рукопись ({activeScene ? activeScene.title : 'Сцена 1'})</span>
+              <span>{activeScene ? `Продолжить рукопись (${activeScene.title})` : 'Перейти к рукописи'}</span>
             </button>
             <button
               onClick={() => onNavigate('codex')}
@@ -168,22 +174,24 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     </span>
                   </div>
                   <p className="text-xs text-slate-400 mt-1.5 line-clamp-2 leading-relaxed">
-                    {activeProject.synopsis}
+                    {activeProject.synopsis || 'Синопсис произведения ещё не заполнен.'}
                   </p>
 
                   {/* Storylines Pills */}
-                  <div className="mt-3 flex flex-wrap gap-1.5 items-center">
-                    <span className="text-[10px] text-slate-400 font-mono">Сюжетные линии:</span>
-                    {activeProject.storylines.map(sl => (
-                      <span
-                        key={sl.id}
-                        className="text-[10px] px-2 py-0.5 rounded-full font-medium"
-                        style={{ backgroundColor: `${sl.color}20`, color: sl.color, border: `1px solid ${sl.color}40` }}
-                      >
-                        {sl.title}
-                      </span>
-                    ))}
-                  </div>
+                  {activeProject.storylines && activeProject.storylines.length > 0 && (
+                    <div className="mt-3 flex flex-wrap gap-1.5 items-center">
+                      <span className="text-[10px] text-slate-400 font-mono">Сюжетные линии:</span>
+                      {activeProject.storylines.map(sl => (
+                        <span
+                          key={sl.id}
+                          className="text-[10px] px-2 py-0.5 rounded-full font-medium"
+                          style={{ backgroundColor: `${sl.color}20`, color: sl.color, border: `1px solid ${sl.color}40` }}
+                        >
+                          {sl.title}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 {/* Chapter & Scene Quick List */}
@@ -191,34 +199,62 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider font-mono">
                     Главы и сцены рукописи:
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                    {activeProject.acts[0]?.chapters.flatMap(ch =>
-                      ch.scenes.map(sc => {
-                        const pov = universe.entities.find(e => e.id === sc.passport.povCharacterId);
-                        return (
-                          <div
-                            key={sc.id}
-                            onClick={() => onNavigate('manuscript', sc.id)}
-                            className="p-3 rounded-lg bg-slate-950/40 border border-slate-800 hover:border-rose-900/60 hover:bg-slate-800/50 transition cursor-pointer flex flex-col justify-between"
-                          >
-                            <div className="flex items-center justify-between gap-1">
-                              <span className="text-xs font-medium text-slate-200 truncate">{sc.title}</span>
-                              <span className="text-[10px] font-mono text-slate-400 shrink-0">{sc.wordCount} сл.</span>
+                  {activeProject.acts.flatMap(a => a.chapters.flatMap(c => c.scenes)).length > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                      {activeProject.acts[0]?.chapters.flatMap(ch =>
+                        ch.scenes.map(sc => {
+                          const pov = universe.entities.find(e => e.id === sc.passport.povCharacterId);
+                          return (
+                            <div
+                              key={sc.id}
+                              onClick={() => onNavigate('manuscript', sc.id)}
+                              className="p-3 rounded-lg bg-slate-950/40 border border-slate-800 hover:border-rose-900/60 hover:bg-slate-800/50 transition cursor-pointer flex flex-col justify-between"
+                            >
+                              <div className="flex items-center justify-between gap-1">
+                                <span className="text-xs font-medium text-slate-200 truncate">{sc.title}</span>
+                                <span className="text-[10px] font-mono text-slate-400 shrink-0">{sc.wordCount} сл.</span>
+                              </div>
+                              <div className="flex items-center justify-between text-[11px] text-slate-400 mt-2">
+                                <span>POV: <strong className="text-slate-300 font-normal">{pov?.title || '—'}</strong></span>
+                                <span className="px-1.5 py-0.2 rounded bg-slate-800 text-[10px] text-slate-300">
+                                  {sc.status === 'revised' ? 'Вычитано' : sc.status === 'in_progress' ? 'В работе' : 'Черновик'}
+                                </span>
+                              </div>
                             </div>
-                            <div className="flex items-center justify-between text-[11px] text-slate-400 mt-2">
-                              <span>POV: <strong className="text-slate-300 font-normal">{pov?.title || '—'}</strong></span>
-                              <span className="px-1.5 py-0.2 rounded bg-slate-800 text-[10px] text-slate-300">
-                                {sc.status === 'revised' ? 'Вычитано' : sc.status === 'in_progress' ? 'В работе' : 'Черновик'}
-                              </span>
-                            </div>
-                          </div>
-                        );
-                      })
-                    )}
-                  </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  ) : (
+                    <div className="p-4 rounded-lg bg-slate-950/40 border border-dashed border-slate-800 text-center space-y-2">
+                      <p className="text-xs text-slate-400">В этом произведении пока нет сцен.</p>
+                      <button
+                        onClick={() => onNavigate('manuscript')}
+                        className="px-3 py-1.5 rounded-md bg-rose-900/50 hover:bg-rose-900/70 text-rose-200 border border-rose-700/50 text-xs transition cursor-pointer"
+                      >
+                        + Открыть Мастерскую текста
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
-            ) : null}
+            ) : (
+              <div className="p-6 rounded-lg bg-slate-950/40 border border-dashed border-slate-800 text-center space-y-3">
+                <FileText className="w-8 h-8 text-slate-600 mx-auto" />
+                <div>
+                  <h4 className="text-sm font-medium text-slate-300">Произведения пока не созданы</h4>
+                  <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
+                    Создайте своё первое литературное произведение или сцену с помощью кнопки «Создать».
+                  </p>
+                </div>
+                <button
+                  onClick={() => onQuickCreate('scene')}
+                  className="px-3 py-1.5 rounded-md bg-rose-600 hover:bg-rose-500 text-white text-xs font-medium transition cursor-pointer shadow-sm"
+                >
+                  + Создать первую сцену
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Key Figures of Universe Codex */}
@@ -236,26 +272,38 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </button>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              {universe.entities.slice(0, 6).map(ent => (
-                <div
-                  key={ent.id}
-                  onClick={() => onNavigate('codex', ent.id)}
-                  className="p-3 rounded-lg bg-slate-950/40 border border-slate-800 hover:border-cyan-800/60 transition cursor-pointer"
+            {universe.entities.length > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {universe.entities.slice(0, 6).map(ent => (
+                  <div
+                    key={ent.id}
+                    onClick={() => onNavigate('codex', ent.id)}
+                    className="p-3 rounded-lg bg-slate-950/40 border border-slate-800 hover:border-cyan-800/60 transition cursor-pointer"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-slate-200 truncate">{ent.title}</span>
+                      <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-slate-800 text-slate-300">
+                        {ent.type}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 mt-1 line-clamp-2">{ent.description}</p>
+                    <div className="mt-2 text-[10px] font-mono text-cyan-400 flex items-center gap-1">
+                      <span>{ent.dynamicStates?.length || 0} состояний во времени</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="p-6 rounded-lg bg-slate-950/40 border border-dashed border-slate-800 text-center space-y-2">
+                <p className="text-xs text-slate-400">База знаний пока пуста.</p>
+                <button
+                  onClick={() => onQuickCreate('entity')}
+                  className="px-3 py-1.5 rounded-md bg-cyan-950/60 hover:bg-cyan-900/60 text-cyan-300 border border-cyan-800/50 text-xs transition cursor-pointer"
                 >
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-slate-200 truncate">{ent.title}</span>
-                    <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-slate-800 text-slate-300">
-                      {ent.type}
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-slate-400 mt-1 line-clamp-2">{ent.description}</p>
-                  <div className="mt-2 text-[10px] font-mono text-cyan-400 flex items-center gap-1">
-                    <span>{ent.dynamicStates.length} состояний во времени</span>
-                  </div>
-                </div>
-              ))}
-            </div>
+                  + Добавить первую сущность
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
@@ -279,22 +327,28 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               Вопросы, требующие авторского внимания и выбора ветви сюжета:
             </p>
 
-            <div className="space-y-2">
-              {unresolvedQuestions.map(q => (
-                <div
-                  key={q.id}
-                  onClick={() => onNavigate('lab', q.id)}
-                  className="p-3 rounded-lg bg-slate-950/60 border border-slate-800/80 hover:border-amber-600/40 transition cursor-pointer space-y-1"
-                >
-                  <div className="text-xs font-semibold text-amber-200">{q.title}</div>
-                  <p className="text-[11px] text-slate-400 line-clamp-2">{q.description}</p>
-                  <div className="flex items-center justify-between text-[10px] text-slate-400 font-mono pt-1">
-                    <span>{q.possibleAnswers.length} гипотез ответа</span>
-                    <span className="text-amber-400">Исследуется</span>
+            {unresolvedQuestions.length > 0 ? (
+              <div className="space-y-2">
+                {unresolvedQuestions.map(q => (
+                  <div
+                    key={q.id}
+                    onClick={() => onNavigate('lab', q.id)}
+                    className="p-3 rounded-lg bg-slate-950/60 border border-slate-800/80 hover:border-amber-600/40 transition cursor-pointer space-y-1"
+                  >
+                    <div className="text-xs font-semibold text-amber-200">{q.title}</div>
+                    <p className="text-[11px] text-slate-400 line-clamp-2">{q.description}</p>
+                    <div className="flex items-center justify-between text-[10px] text-slate-400 font-mono pt-1">
+                      <span>{q.possibleAnswers.length} гипотез ответа</span>
+                      <span className="text-amber-400">Исследуется</span>
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            ) : (
+              <div className="p-4 rounded-lg bg-slate-950/40 border border-dashed border-slate-800 text-center">
+                <p className="text-xs text-slate-400">Нет открытых сюжетных вопросов.</p>
+              </div>
+            )}
           </div>
 
           {/* Author Decisions Log */}
@@ -312,31 +366,37 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </button>
             </div>
 
-            <div className="space-y-2">
-              {universe.decisions.map(d => (
-                <div
-                  key={d.id}
-                  onClick={() => onNavigate('lab', d.id)}
-                  className="p-3 rounded-lg bg-slate-950/60 border border-slate-800/80 hover:border-emerald-700/50 transition cursor-pointer space-y-1"
-                >
-                  <div className="text-xs font-semibold text-emerald-200">{d.title}</div>
-                  <p className="text-[11px] text-slate-400 line-clamp-2">{d.chosenDecision}</p>
-                  <div className="text-[10px] text-slate-400 font-mono pt-0.5">
-                    Дата: {d.decisionDate}
+            {universe.decisions.length > 0 ? (
+              <div className="space-y-2">
+                {universe.decisions.map(d => (
+                  <div
+                    key={d.id}
+                    onClick={() => onNavigate('lab', d.id)}
+                    className="p-3 rounded-lg bg-slate-950/60 border border-slate-800/80 hover:border-emerald-700/50 transition cursor-pointer space-y-1"
+                  >
+                    <div className="text-xs font-semibold text-emerald-200">{d.title}</div>
+                    <p className="text-[11px] text-slate-400 line-clamp-2">{d.chosenDecision}</p>
+                    <div className="text-[10px] text-slate-400 font-mono pt-0.5">
+                      Дата: {d.decisionDate}
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            ) : (
+              <div className="p-4 rounded-lg bg-slate-950/40 border border-dashed border-slate-800 text-center">
+                <p className="text-xs text-slate-400">Решений пока не зафиксировано.</p>
+              </div>
+            )}
           </div>
 
           {/* AI Advisor Card */}
           <div className="p-4 rounded-xl bg-gradient-to-br from-rose-950/40 via-purple-950/30 to-slate-900 border border-purple-800/40 space-y-2.5">
             <div className="flex items-center gap-2 text-rose-300">
               <Sparkles className="w-4 h-4" />
-              <span className="text-xs font-bold font-serif tracking-wide">ИИ-Редактор REDCROW</span>
+              <span className="text-xs font-bold font-serif tracking-wide">ИИ-Редактор канона</span>
             </div>
             <p className="text-xs text-slate-300 leading-relaxed">
-              Готов проверить сцену на драматургический ритм, баланс диалогов или смоделировать: <em className="text-rose-200 font-serif">«Что изменится, если изменить природу Осколков?»</em>
+              Готов проверить сцену на драматургический ритм, баланс диалогов и экспозиции, или смоделировать каскад сюжетных изменений при редактировании канона.
             </p>
             <button
               onClick={() => onNavigate('ai')}

@@ -196,7 +196,7 @@ export const Omnisearch: React.FC<OmnisearchProps> = ({
         <div className="max-h-96 overflow-y-auto divide-y divide-slate-800/60 p-1">
           {query.trim() === '' ? (
             <div className="py-12 text-center text-slate-400 text-xs">
-              Введите ключевое слово, имя персонажа или событие для сквозного поиска по вселенной REDCROW 3000
+              Введите ключевое слово, имя персонажа или событие для сквозного поиска по миру {universe.universeName || ''}
             </div>
           ) : searchResults.length === 0 ? (
             <div className="py-10 text-center text-slate-400 text-xs">
@@ -239,7 +239,7 @@ export const Omnisearch: React.FC<OmnisearchProps> = ({
 
         <div className="px-4 py-2 bg-slate-950/80 border-t border-slate-800 flex items-center justify-between text-[11px] text-slate-400 font-mono">
           <span>Навигация: ↵ переход · Esc закрыть</span>
-          <span>Вселенная REDCROW 3000</span>
+          <span>Вселенная: {universe.universeName || 'Канон'}</span>
         </div>
       </div>
     </div>

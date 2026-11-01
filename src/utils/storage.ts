@@ -17,7 +17,85 @@ export interface StorageStats {
 }
 
 /**
- * Migrates and validates raw stored data to prevent silent data loss
+ * Creates a brand new, empty universe with a clean project, act, chapter, and draft scene.
+ * No demo entities, events, or hypotheses are included.
+ */
+export function createEmptyUniverse(name: string, tagline?: string): UniverseData {
+  const timestamp = new Date().toISOString();
+  const sceneId = `scene-${Date.now()}-1`;
+  const chapterId = `ch-${Date.now()}-1`;
+  const actId = `act-${Date.now()}-1`;
+  const projectId = `proj-${Date.now()}-1`;
+
+  return {
+    id: `universe-${Date.now()}`,
+    universeName: name.trim() || 'Новая вселенная',
+    version: '1.0',
+    tagline: tagline?.trim() || 'Авторский мир и литературные хроники',
+    activeProjectId: projectId,
+    activeSceneId: sceneId,
+    entities: [],
+    events: [],
+    projects: [
+      {
+        id: projectId,
+        title: name.trim() ? `${name.trim()}: Том I` : 'Книга I',
+        synopsis: '',
+        updatedAt: timestamp,
+        storylines: [],
+        acts: [
+          {
+            id: actId,
+            title: 'Часть 1',
+            order: 1,
+            chapters: [
+              {
+                id: chapterId,
+                title: 'Глава 1',
+                order: 1,
+                scenes: [
+                  {
+                    id: sceneId,
+                    title: 'Сцена 1. Начало',
+                    order: 1,
+                    status: 'draft',
+                    wordCount: 0,
+                    updatedAt: timestamp,
+                    revisions: [],
+                    passport: {
+                      participatingCharacterIds: [],
+                      characterGoal: '',
+                      conflictObstacle: '',
+                      initialState: '',
+                      finalState: '',
+                      relationshipShift: '',
+                      newInformationRevealed: '',
+                      dramaticTurn: '',
+                      hook: '',
+                      sceneFunction: '',
+                      storylineIds: [],
+                      polarity: 0,
+                      epochYear: ''
+                    },
+                    text: ''
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    hypotheses: [],
+    decisions: [],
+    questions: [],
+    consistencyIssues: []
+  };
+}
+
+/**
+ * Migrates and validates raw stored data to prevent silent data loss.
+ * Preserves user's empty arrays and custom data without injecting demo values.
  */
 export function migrateAndValidateUniverse(parsed: any): UniverseData {
   if (!parsed || typeof parsed !== 'object') {
@@ -27,17 +105,32 @@ export function migrateAndValidateUniverse(parsed: any): UniverseData {
   // Handle wrapped export files that contain { schemaVersion, data }
   const raw = parsed.data && typeof parsed.data === 'object' ? parsed.data : parsed;
 
-  // Build clean UniverseData merging defaults for any missing properties
+  const isCustomOrExplicit = Boolean(
+    raw.universeName !== undefined ||
+    raw.id !== undefined ||
+    Array.isArray(raw.projects) ||
+    Array.isArray(raw.entities)
+  );
+
+  if (!isCustomOrExplicit) {
+    return initialUniverseData;
+  }
+
+  const projects = Array.isArray(raw.projects) ? raw.projects : [];
+  const activeProjectId = typeof raw.activeProjectId === 'string' && raw.activeProjectId
+    ? raw.activeProjectId
+    : (projects[0]?.id || 'project-1');
+
   const universe: UniverseData = {
-    id: typeof raw.id === 'string' ? raw.id : initialUniverseData.id,
-    universeName: typeof raw.universeName === 'string' ? raw.universeName : initialUniverseData.universeName,
-    version: typeof raw.version === 'string' ? raw.version : `${CURRENT_SCHEMA_VERSION}.0`,
-    tagline: typeof raw.tagline === 'string' ? raw.tagline : initialUniverseData.tagline,
-    activeProjectId: typeof raw.activeProjectId === 'string' ? raw.activeProjectId : (raw.projects?.[0]?.id || initialUniverseData.activeProjectId),
-    activeSceneId: typeof raw.activeSceneId === 'string' ? raw.activeSceneId : undefined,
-    entities: Array.isArray(raw.entities) ? raw.entities : initialUniverseData.entities,
-    events: Array.isArray(raw.events) ? raw.events : initialUniverseData.events,
-    projects: Array.isArray(raw.projects) && raw.projects.length > 0 ? raw.projects : initialUniverseData.projects,
+    id: typeof raw.id === 'string' ? raw.id : `universe-${Date.now()}`,
+    universeName: typeof raw.universeName === 'string' ? raw.universeName : 'Моя Вселенная',
+    version: typeof raw.version === 'string' ? raw.version : '1.0',
+    tagline: typeof raw.tagline === 'string' ? raw.tagline : '',
+    activeProjectId,
+    activeSceneId: typeof raw.activeSceneId === 'string' ? raw.activeSceneId : projects[0]?.acts?.[0]?.chapters?.[0]?.scenes?.[0]?.id,
+    entities: Array.isArray(raw.entities) ? raw.entities : [],
+    events: Array.isArray(raw.events) ? raw.events : [],
+    projects,
     hypotheses: Array.isArray(raw.hypotheses) ? raw.hypotheses : [],
     decisions: Array.isArray(raw.decisions) ? raw.decisions : [],
     questions: Array.isArray(raw.questions) ? raw.questions : [],
@@ -132,6 +225,16 @@ export function getStorageStats(): StorageStats {
   }
 }
 
+export function getEmergencyBackup(): UniverseData | null {
+  try {
+    const raw = localStorage.getItem(BACKUP_KEY);
+    if (!raw) return null;
+    return migrateAndValidateUniverse(JSON.parse(raw));
+  } catch {
+    return null;
+  }
+}
+
 export function resetUniverseToDefault(): UniverseData {
   saveUniverseData(initialUniverseData);
   return initialUniverseData;
@@ -151,7 +254,8 @@ export function exportUniverseAsJSON(data: UniverseData): void {
   const downloadAnchor = document.createElement('a');
   downloadAnchor.setAttribute('href', jsonString);
   const dateStr = new Date().toISOString().slice(0, 10);
-  downloadAnchor.setAttribute('download', `REDCROW_3000_Universe_${dateStr}.json`);
+  const safeName = (data.universeName || 'Universe').trim().replace(/[\s/:\\*?"<>|]+/g, '_');
+  downloadAnchor.setAttribute('download', `${safeName}_${dateStr}.json`);
   document.body.appendChild(downloadAnchor);
   downloadAnchor.click();
   downloadAnchor.remove();
@@ -159,7 +263,7 @@ export function exportUniverseAsJSON(data: UniverseData): void {
 
 export function exportManuscriptAsMarkdown(data: UniverseData, projectId?: string): void {
   const project = data.projects.find(p => p.id === (projectId || data.activeProjectId)) || data.projects[0];
-  if (!project) return;
+  if (!project || !Array.isArray(project.acts)) return;
 
   let md = `# ${project.title}\n\n`;
   md += `> **Синопсис:** ${project.synopsis}\n\n---\n\n`;

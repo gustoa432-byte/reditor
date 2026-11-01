@@ -10,8 +10,11 @@ import {
   ArrowRight,
   BookOpen,
   Sparkles,
+  Trash2,
   X
 } from 'lucide-react';
+import { ConfirmDeleteModal } from '../common/ConfirmDeleteModal';
+import { softDeleteEvent } from '../../utils/universeOps';
 
 interface TimelineViewProps {
   universe: UniverseData;
@@ -27,16 +30,23 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
   const [viewMode, setViewMode] = useState<'actual' | 'reader_reveal'>('actual');
   const [selectedEntityFilter, setSelectedEntityFilter] = useState<string>('all');
   const [addEventModalOpen, setAddEventModalOpen] = useState(false);
+  const [eventToDelete, setEventToDelete] = useState<WorldEvent | null>(null);
 
   // New Event Form State
   const [newTitle, setNewTitle] = useState('');
   const [newDescription, setNewDescription] = useState('');
   const [newDateDisplay, setNewDateDisplay] = useState('');
   const [newPrecision, setNewPrecision] = useState<DatePrecision>('exact');
-  const [newYearNum, setNewYearNum] = useState<number>(2450);
+  const [newYearNum, setNewYearNum] = useState<number>(1);
   const [newDiscoveryTime, setNewDiscoveryTime] = useState('');
   const [newReaderReveal, setNewReaderReveal] = useState('');
   const [newEntities, setNewEntities] = useState<string[]>([]);
+
+  const handleConfirmDeleteEvent = () => {
+    if (!eventToDelete) return;
+    onUpdateUniverse(prev => softDeleteEvent(prev, eventToDelete.id));
+    setEventToDelete(null);
+  };
 
   // Sort events by actual yearNum
   const sortedEvents = [...universe.events].sort((a, b) => {
@@ -89,14 +99,15 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
   };
 
   return (
-    <div className="max-w-6xl mx-auto p-4 md:p-6 space-y-6">
+    <div className="h-full flex-1 min-h-0 overflow-y-auto bg-slate-950">
+      <div className="max-w-6xl mx-auto p-4 md:p-6 space-y-6">
       {/* Top Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-4">
         <div>
           <div className="flex items-center gap-2">
             <Clock className="w-5 h-5 text-rose-400" />
             <h1 className="text-xl md:text-2xl font-serif font-bold text-slate-100">
-              Хронология вселенной REDCROW 3000
+              Хронология: {universe.universeName || 'Вселенная'}
             </h1>
           </div>
           <p className="text-xs text-slate-400 mt-1">
@@ -198,9 +209,18 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
                       </span>
                     )}
                   </div>
-                  <span className="text-[11px] font-mono text-slate-400">
-                    ID: {evt.id}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-mono text-slate-500">
+                      ID: {evt.id}
+                    </span>
+                    <button
+                      onClick={() => setEventToDelete(evt)}
+                      className="text-slate-500 hover:text-red-400 p-1 rounded opacity-0 group-hover:opacity-100 transition cursor-pointer"
+                      title="Удалить событие в корзину"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
 
                 {/* Event Title & Description */}
@@ -263,6 +283,30 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
             </div>
           );
         })}
+
+        {filteredEvents.length === 0 && (
+          <div className="p-8 rounded-xl bg-slate-900/40 border border-slate-800 text-center space-y-3">
+            <div className="w-12 h-12 rounded-xl bg-rose-950/40 border border-rose-800/40 flex items-center justify-center mx-auto text-rose-400">
+              <Clock className="w-6 h-6" />
+            </div>
+            <h3 className="text-sm font-serif font-bold text-slate-200">
+              {universe.events.length === 0 ? 'Хронология пуста' : 'Нет событий по выбранному фильтру'}
+            </h3>
+            <p className="text-xs text-slate-400 max-w-sm mx-auto">
+              {universe.events.length === 0
+                ? 'Зафиксируйте первое историческое событие, поворотную точку или веху развития вашего мира.'
+                : 'Выберите «Все события» или сбросьте фильтр по линии персонажа.'}
+            </p>
+            {universe.events.length === 0 && (
+              <button
+                onClick={() => setAddEventModalOpen(true)}
+                className="px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold shadow-md transition cursor-pointer"
+              >
+                Добавить первое событие
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Add Event Modal */}
@@ -294,7 +338,7 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
                   required
                   value={newTitle}
                   onChange={e => setNewTitle(e.target.value)}
-                  placeholder="Например: Взрыв Реактора Сердца на Чёрном острове..."
+                  placeholder="Например: Заключение Великого Перемирия или Основание Города"
                   className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-slate-200 focus:outline-none focus:border-rose-500"
                 />
               </div>
@@ -331,7 +375,7 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
                     type="text"
                     value={newDateDisplay}
                     onChange={e => setNewDateDisplay(e.target.value)}
-                    placeholder="ок. 2450 г. или 14 мая 2450"
+                    placeholder="Например: 120 г. от основания или 15 мая 104 г."
                     className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-slate-200"
                   />
                 </div>
@@ -393,6 +437,18 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
           </form>
         </div>
       )}
+
+      {/* Delete Event Confirmation Modal */}
+      <ConfirmDeleteModal
+        isOpen={!!eventToDelete}
+        onClose={() => setEventToDelete(null)}
+        onConfirm={handleConfirmDeleteEvent}
+        title="Переместить событие в корзину?"
+        description={`Событие «${eventToDelete?.title}» будет перемещено в корзину. Вы сможете восстановить его в любой момент.`}
+        confirmText="В корзину"
+        isPermanent={false}
+      />
+      </div>
     </div>
   );
 };

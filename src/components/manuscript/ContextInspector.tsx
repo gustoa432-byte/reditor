@@ -53,7 +53,7 @@ export const ContextInspector: React.FC<ContextInspectorProps> = ({
     return false;
   });
 
-  const sceneEpochYear = scene.passport.epochYear || '2450 г.';
+  const sceneEpochYear = scene.passport.epochYear || 'Время не указано';
 
   return (
     <aside className="w-80 border-l border-slate-800 bg-slate-950/90 flex flex-col h-full overflow-y-auto scrollbar-thin">

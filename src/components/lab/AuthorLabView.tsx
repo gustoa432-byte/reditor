@@ -20,6 +20,8 @@ import {
   Trash2,
   X
 } from 'lucide-react';
+import { ConfirmDeleteModal } from '../common/ConfirmDeleteModal';
+import { softDeleteQuestion, softDeleteHypothesis } from '../../utils/universeOps';
 
 interface AuthorLabViewProps {
   universe: UniverseData;
@@ -40,6 +42,21 @@ export const AuthorLabView: React.FC<AuthorLabViewProps> = ({
   const [addHypothesisModalOpen, setAddHypothesisModalOpen] = useState(false);
   const [addDecisionModalOpen, setAddDecisionModalOpen] = useState(false);
   const [addQuestionModalOpen, setAddQuestionModalOpen] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState<{
+    type: 'question' | 'hypothesis';
+    id: string;
+    title: string;
+  } | null>(null);
+
+  const handleConfirmDelete = () => {
+    if (!itemToDelete) return;
+    if (itemToDelete.type === 'question') {
+      onUpdateUniverse(prev => softDeleteQuestion(prev, itemToDelete.id));
+    } else if (itemToDelete.type === 'hypothesis') {
+      onUpdateUniverse(prev => softDeleteHypothesis(prev, itemToDelete.id));
+    }
+    setItemToDelete(null);
+  };
 
   // New Hypothesis State
   const [hypoTitle, setHypoTitle] = useState('');
@@ -154,7 +171,8 @@ export const AuthorLabView: React.FC<AuthorLabViewProps> = ({
   };
 
   return (
-    <div className="max-w-6xl mx-auto p-4 md:p-6 space-y-6">
+    <div className="h-full flex-1 min-h-0 overflow-y-auto bg-slate-950">
+      <div className="max-w-6xl mx-auto p-4 md:p-6 space-y-6">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-4">
         <div>
@@ -165,7 +183,7 @@ export const AuthorLabView: React.FC<AuthorLabViewProps> = ({
             </h1>
           </div>
           <p className="text-xs text-slate-400 mt-1">
-            Фиксация процесса мышления автора: гипотезы, журнал архитектурных решений и реестр нерешённых вопросов вселенной REDCROW 3000.
+            Фиксация процесса мышления автора: гипотезы, журнал архитектурных решений и реестр нерешённых вопросов вселенной {universe.universeName || ''}.
           </p>
         </div>
 
@@ -224,20 +242,29 @@ export const AuthorLabView: React.FC<AuthorLabViewProps> = ({
             {universe.questions.map(q => (
               <div
                 key={q.id}
-                className="p-5 rounded-xl bg-slate-900/80 border border-slate-800 hover:border-amber-700/40 transition shadow-lg space-y-3"
+                className="p-5 rounded-xl bg-slate-900/80 border border-slate-800 hover:border-amber-700/40 transition shadow-lg space-y-3 group"
               >
                 <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
                     <HelpCircle className="w-4 h-4 text-amber-400 shrink-0" />
-                    <h3 className="font-serif font-bold text-slate-100 text-sm leading-snug">{q.title}</h3>
+                    <h3 className="font-serif font-bold text-slate-100 text-sm leading-snug truncate">{q.title}</h3>
                   </div>
-                  <span className={`text-[10px] font-mono px-2 py-0.5 rounded border shrink-0 ${
-                    q.status === 'investigating'
-                      ? 'bg-amber-950/60 text-amber-300 border-amber-800/40'
-                      : 'bg-emerald-950/60 text-emerald-300 border-emerald-800/40'
-                  }`}>
-                    {q.status === 'investigating' ? 'Исследуется' : 'Решено'}
-                  </span>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <span className={`text-[10px] font-mono px-2 py-0.5 rounded border ${
+                      q.status === 'investigating'
+                        ? 'bg-amber-950/60 text-amber-300 border-amber-800/40'
+                        : 'bg-emerald-950/60 text-emerald-300 border-emerald-800/40'
+                    }`}>
+                      {q.status === 'investigating' ? 'Исследуется' : 'Решено'}
+                    </span>
+                    <button
+                      onClick={() => setItemToDelete({ type: 'question', id: q.id, title: q.title })}
+                      className="text-slate-500 hover:text-red-400 p-1 rounded opacity-0 group-hover:opacity-100 transition cursor-pointer"
+                      title="Удалить вопрос в корзину"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
 
                 <p className="text-xs text-slate-300 leading-relaxed">{q.description}</p>
@@ -245,9 +272,6 @@ export const AuthorLabView: React.FC<AuthorLabViewProps> = ({
                 {/* Possible Answers */}
                 {q.possibleAnswers.length > 0 && (
                   <div className="space-y-1.5 bg-slate-950/60 p-3 rounded-lg border border-slate-800/60 text-xs">
-                    <span className="text-[10px] font-mono text-amber-400 uppercase block font-semibold">
-                      Возможные ответы и гипотезы:
-                    </span>
                     <ul className="space-y-1 list-disc list-inside text-slate-300">
                       {q.possibleAnswers.map((ans, idx) => (
                         <li key={idx} className="leading-relaxed">{ans}</li>
@@ -265,6 +289,26 @@ export const AuthorLabView: React.FC<AuthorLabViewProps> = ({
               </div>
             ))}
           </div>
+
+          {universe.questions.length === 0 && (
+            <div className="p-8 rounded-xl bg-slate-900/40 border border-slate-800 text-center space-y-3">
+              <div className="w-12 h-12 rounded-xl bg-amber-950/40 border border-amber-800/40 flex items-center justify-center mx-auto text-amber-400">
+                <HelpCircle className="w-6 h-6" />
+              </div>
+              <h3 className="text-sm font-serif font-bold text-slate-200">
+                Реестр вопросов пуст
+              </h3>
+              <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                Здесь фиксируются ключевые творческие дилеммы, открытые тайны сюжета и неразрешенные вопросы вселенной.
+              </p>
+              <button
+                onClick={() => setAddQuestionModalOpen(true)}
+                className="px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-slate-950 text-xs font-bold shadow-md transition cursor-pointer"
+              >
+                Сформулировать первый вопрос
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -300,19 +344,28 @@ export const AuthorLabView: React.FC<AuthorLabViewProps> = ({
               return (
                 <div
                   key={hyp.id}
-                  className="p-5 rounded-xl bg-slate-900/80 border border-slate-800 hover:border-slate-700 transition shadow-lg space-y-3"
+                  className="p-5 rounded-xl bg-slate-900/80 border border-slate-800 hover:border-slate-700 transition shadow-lg space-y-3 group"
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-2">
-                    <div className="flex items-center gap-2">
-                      <FlaskConical className="w-4 h-4 text-rose-400" />
-                      <h3 className="font-serif font-bold text-slate-100 text-sm">{hyp.title}</h3>
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                      <FlaskConical className="w-4 h-4 text-rose-400 shrink-0" />
+                      <h3 className="font-serif font-bold text-slate-100 text-sm truncate">{hyp.title}</h3>
                     </div>
-                    <span className={`text-[10px] font-mono px-2 py-0.5 rounded border ${statusColors[hyp.status]}`}>
-                      {hyp.status === 'accepted_canon' && 'Принята в канон'}
-                      {hyp.status === 'rejected' && 'Отклонена (в архиве)'}
-                      {hyp.status === 'hypothesis' && 'Гипотеза на проверке'}
-                      {hyp.status === 'partially_accepted' && 'Частично принята'}
-                    </span>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <span className={`text-[10px] font-mono px-2 py-0.5 rounded border ${statusColors[hyp.status]}`}>
+                        {hyp.status === 'accepted_canon' && 'Принята в канон'}
+                        {hyp.status === 'rejected' && 'Отклонена (в архиве)'}
+                        {hyp.status === 'hypothesis' && 'Гипотеза на проверке'}
+                        {hyp.status === 'partially_accepted' && 'Частично принята'}
+                      </span>
+                      <button
+                        onClick={() => setItemToDelete({ type: 'hypothesis', id: hyp.id, title: hyp.title })}
+                        className="text-slate-500 hover:text-red-400 p-1 rounded opacity-0 group-hover:opacity-100 transition cursor-pointer"
+                        title="Удалить гипотезу в корзину"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
 
                   <p className="text-xs text-slate-300 leading-relaxed">{hyp.content}</p>
@@ -347,6 +400,26 @@ export const AuthorLabView: React.FC<AuthorLabViewProps> = ({
               );
             })}
           </div>
+
+          {universe.hypotheses.length === 0 && (
+            <div className="p-8 rounded-xl bg-slate-900/40 border border-slate-800 text-center space-y-3">
+              <div className="w-12 h-12 rounded-xl bg-rose-950/40 border border-rose-800/40 flex items-center justify-center mx-auto text-rose-400">
+                <FlaskConical className="w-6 h-6" />
+              </div>
+              <h3 className="text-sm font-serif font-bold text-slate-200">
+                Лаборатория гипотез пуста
+              </h3>
+              <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                Здесь автор может проверять идеи, формулировать аргументы за и против и тестировать сюжетные развилки.
+              </p>
+              <button
+                onClick={() => setAddHypothesisModalOpen(true)}
+                className="px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold shadow-md transition cursor-pointer"
+              >
+                Записать первую гипотезу
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -400,6 +473,26 @@ export const AuthorLabView: React.FC<AuthorLabViewProps> = ({
               </div>
             ))}
           </div>
+
+          {universe.decisions.length === 0 && (
+            <div className="p-8 rounded-xl bg-slate-900/40 border border-slate-800 text-center space-y-3">
+              <div className="w-12 h-12 rounded-xl bg-emerald-950/40 border border-emerald-800/40 flex items-center justify-center mx-auto text-emerald-400">
+                <CheckCircle2 className="w-6 h-6" />
+              </div>
+              <h3 className="text-sm font-serif font-bold text-slate-200">
+                Журнал решений пуст
+              </h3>
+              <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                Фиксируйте фундаментальные творческие выборы, чтобы не возвращаться к сомнениям и сохранять логику канона.
+              </p>
+              <button
+                onClick={() => setAddDecisionModalOpen(true)}
+                className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-md transition cursor-pointer"
+              >
+                Зафиксировать первое решение
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -431,7 +524,7 @@ export const AuthorLabView: React.FC<AuthorLabViewProps> = ({
                   required
                   value={qTitle}
                   onChange={e => setQTitle(e.target.value)}
-                  placeholder="Например: Что именно знали Создатели перед отлётом?"
+                  placeholder="Например: Каковы истинные мотивы лидера восстания?"
                   className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-slate-200 focus:outline-none focus:border-amber-500"
                 />
               </div>
@@ -464,7 +557,7 @@ export const AuthorLabView: React.FC<AuthorLabViewProps> = ({
                   type="text"
                   value={qImpact}
                   onChange={e => setQImpact(e.target.value)}
-                  placeholder="На что повлияет выбор (на финал книги, судьбу Фелиции)..."
+                  placeholder="На что повлияет выбор (на финал романа, судьбу протагониста)..."
                   className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-slate-200 focus:outline-none focus:border-amber-500"
                 />
               </div>
@@ -517,7 +610,7 @@ export const AuthorLabView: React.FC<AuthorLabViewProps> = ({
                   required
                   value={hypoTitle}
                   onChange={e => setHypoTitle(e.target.value)}
-                  placeholder="Например: Истинная природа кристаллов Осколков..."
+                  placeholder="Например: Альтернативное происхождение древнего ордена..."
                   className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-slate-200 focus:outline-none focus:border-rose-500"
                 />
               </div>
@@ -575,6 +668,22 @@ export const AuthorLabView: React.FC<AuthorLabViewProps> = ({
           </form>
         </div>
       )}
+
+      {/* Delete Item Confirmation Modal */}
+      <ConfirmDeleteModal
+        isOpen={!!itemToDelete}
+        onClose={() => setItemToDelete(null)}
+        onConfirm={handleConfirmDelete}
+        title={
+          itemToDelete?.type === 'question'
+            ? 'Переместить вопрос в корзину?'
+            : 'Переместить гипотезу в корзину?'
+        }
+        description={`«${itemToDelete?.title}» будет перемещен(а) в корзину. Вы сможете восстановить объект в любое время.`}
+        confirmText="В корзину"
+        isPermanent={false}
+      />
+      </div>
     </div>
   );
 };
