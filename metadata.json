@@ -1,0 +1,6 @@
+{
+  "name": "REDCROW 3000 — Авторская среда и система управления вселенной",
+  "description": "Единая цифровая среда для разработки вселенной REDCROW 3000, хранения хронологии и базы знаний, и написания литературных произведений.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
