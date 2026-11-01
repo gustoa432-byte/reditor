@@ -274,3 +274,6 @@ export interface UniverseData {
   activeProjectId: string;
   activeSceneId?: string;
 }
+
+export type UniverseUpdater = UniverseData | ((prev: UniverseData) => UniverseData);
+

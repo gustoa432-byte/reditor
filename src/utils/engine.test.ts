@@ -43,3 +43,35 @@ test('runConsistencyCheck preserves intentional author annotations and identifie
   assert.equal(issue2.isIntentional, true);
   assert.equal(issue2.intentReason, 'character_lie');
 });
+
+test('migrateAndValidateUniverse preserves partial data and unpacks wrapped exports', async () => {
+  const { migrateAndValidateUniverse } = await import('./storage');
+
+  // Test 1: Wrapped export unpacks cleanly
+  const wrapped = {
+    schemaVersion: 3,
+    exportedAt: '2026-11-01T00:00:00Z',
+    data: {
+      id: 'custom-universe',
+      universeName: 'CUSTOM_WORLD',
+      entities: [{ id: 'ent-1', title: 'Custom Entity', type: 'character' }],
+      projects: [{ id: 'p-1', title: 'Custom Novel', acts: [] }]
+    }
+  };
+  const unpacked = migrateAndValidateUniverse(wrapped);
+  assert.equal(unpacked.id, 'custom-universe');
+  assert.equal(unpacked.universeName, 'CUSTOM_WORLD');
+  assert.equal(unpacked.entities.length, 1);
+  assert.ok(Array.isArray(unpacked.hypotheses), 'Missing arrays should be defaulted');
+
+  // Test 2: Incomplete raw object merges missing arrays instead of crashing or wiping
+  const partial = {
+    id: 'partial-world',
+    projects: initialUniverseData.projects
+  };
+  const restored = migrateAndValidateUniverse(partial);
+  assert.equal(restored.id, 'partial-world');
+  assert.ok(Array.isArray(restored.entities));
+  assert.ok(Array.isArray(restored.events));
+});
+

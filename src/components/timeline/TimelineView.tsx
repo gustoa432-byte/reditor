@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { DatePrecision, UniverseData, WorldEvent, WorkspaceTab } from '../../types';
+import { DatePrecision, UniverseData, UniverseUpdater, WorldEvent, WorkspaceTab } from '../../types';
 import {
   Clock,
   Plus,
@@ -15,7 +15,7 @@ import {
 
 interface TimelineViewProps {
   universe: UniverseData;
-  onUpdateUniverse: (updated: UniverseData) => void;
+  onUpdateUniverse: (updater: UniverseUpdater) => void;
   onNavigate: (tab: WorkspaceTab, targetId?: string) => void;
 }
 
@@ -74,10 +74,10 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
       isMilestone: true
     };
 
-    onUpdateUniverse({
-      ...universe,
-      events: [...universe.events, newEvt]
-    });
+    onUpdateUniverse(prev => ({
+      ...prev,
+      events: [...prev.events, newEvt]
+    }));
 
     setAddEventModalOpen(false);
     setNewTitle('');

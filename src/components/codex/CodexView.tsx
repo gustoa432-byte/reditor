@@ -5,6 +5,7 @@ import {
   EntityState,
   EntityType,
   UniverseData,
+  UniverseUpdater,
   WorkspaceTab,
   WorldCredibility
 } from '../../types';
@@ -30,7 +31,7 @@ import {
 interface CodexViewProps {
   universe: UniverseData;
   initialSelectedEntityId?: string;
-  onUpdateUniverse: (updated: UniverseData) => void;
+  onUpdateUniverse: (updater: UniverseUpdater) => void;
   onNavigate: (tab: WorkspaceTab, targetId?: string) => void;
 }
 
@@ -88,17 +89,19 @@ export const CodexView: React.FC<CodexViewProps> = ({
   });
 
   // Handler to update selected entity
-  const handleUpdateEntity = (field: keyof CodexEntity, value: any) => {
+  const handleUpdateEntity = <K extends keyof CodexEntity>(field: K, value: CodexEntity[K]) => {
     if (!selectedEntity) return;
-    const updated = universe.entities.map(e => {
-      if (e.id !== selectedEntity.id) return e;
-      return {
-        ...e,
-        [field]: value,
-        updatedAt: new Date().toISOString()
-      };
-    });
-    onUpdateUniverse({ ...universe, entities: updated });
+    onUpdateUniverse(prev => ({
+      ...prev,
+      entities: prev.entities.map(e => {
+        if (e.id !== selectedEntity.id) return e;
+        return {
+          ...e,
+          [field]: value,
+          updatedAt: new Date().toISOString()
+        };
+      })
+    }));
   };
 
   // Add Dynamic State
@@ -122,16 +125,18 @@ export const CodexView: React.FC<CodexViewProps> = ({
       resources: 'Не указаны'
     };
 
-    const updated = universe.entities.map(ent => {
-      if (ent.id !== selectedEntity.id) return ent;
-      return {
-        ...ent,
-        dynamicStates: [...ent.dynamicStates, newState],
-        updatedAt: new Date().toISOString()
-      };
-    });
+    onUpdateUniverse(prev => ({
+      ...prev,
+      entities: prev.entities.map(ent => {
+        if (ent.id !== selectedEntity.id) return ent;
+        return {
+          ...ent,
+          dynamicStates: [...ent.dynamicStates, newState],
+          updatedAt: new Date().toISOString()
+        };
+      })
+    }));
 
-    onUpdateUniverse({ ...universe, entities: updated });
     setAddStateModalOpen(false);
     setNewStateEpoch('');
     setNewStateTitle('');
@@ -161,10 +166,10 @@ export const CodexView: React.FC<CodexViewProps> = ({
       updatedAt: new Date().toISOString()
     };
 
-    onUpdateUniverse({
-      ...universe,
-      entities: [newEntity, ...universe.entities]
-    });
+    onUpdateUniverse(prev => ({
+      ...prev,
+      entities: [newEntity, ...prev.entities]
+    }));
 
     setSelectedEntityId(newId);
     setAddEntityModalOpen(false);
@@ -297,7 +302,7 @@ export const CodexView: React.FC<CodexViewProps> = ({
                   <label className="text-xs text-slate-400 font-mono">Статус канона:</label>
                   <select
                     value={selectedEntity.canonStatus}
-                    onChange={e => handleUpdateEntity('canonStatus', e.target.value)}
+                    onChange={e => handleUpdateEntity('canonStatus', e.target.value as CanonStatus)}
                     className="bg-slate-900 border border-slate-700 text-xs font-medium text-slate-200 rounded px-2.5 py-1.5 focus:outline-none cursor-pointer"
                   >
                     <option value="canon">Канон вселенной</option>

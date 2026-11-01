@@ -3,7 +3,8 @@ import { UniverseData } from '../../types';
 import {
   exportManuscriptAsMarkdown,
   exportUniverseAsJSON,
-  resetUniverseToDefault
+  resetUniverseToDefault,
+  getStorageStats
 } from '../../utils/storage';
 import {
   Download,
@@ -62,6 +63,8 @@ export const ExportModal: React.FC<ExportModalProps> = ({
     }
   };
 
+  const stats = universe ? getStorageStats() : null;
+
   return (
     <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
       <div className="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl w-full max-w-xl p-6 space-y-6">
@@ -82,6 +85,22 @@ export const ExportModal: React.FC<ExportModalProps> = ({
             <X className="w-5 h-5" />
           </button>
         </div>
+
+        {/* Storage Stats Bar */}
+        {stats && (
+          <div className="p-3 rounded-lg bg-slate-950/80 border border-slate-800 text-xs flex items-center justify-between">
+            <span className="text-slate-400 font-mono">
+              Объем базы: <strong className="text-slate-200 font-bold">{stats.kbUsed} КБ</strong> ({stats.percentQuota}% от квоты 5 МБ)
+            </span>
+            <span className={`text-[10px] font-mono px-2 py-0.5 rounded border ${
+              stats.isNearLimit
+                ? 'bg-amber-950 text-amber-300 border-amber-800/40'
+                : 'bg-emerald-950 text-emerald-300 border-emerald-800/40'
+            }`}>
+              {stats.isNearLimit ? 'Требуется экспорт' : 'Хранилище в норме'}
+            </span>
+          </div>
+        )}
 
         {/* Action Grid */}
         <div className="space-y-3">

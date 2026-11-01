@@ -11,12 +11,13 @@ export function runConsistencyCheck(universe: UniverseData): ConsistencyIssue[] 
 
   // 1. Check Events vs Character Lifespans / Bounds
   universe.events.forEach(evt => {
-    if (evt.actualTime.yearNum !== undefined) {
+    const evtYear = evt.actualTime.yearNum;
+    if (evtYear !== undefined) {
       evt.participatingEntityIds.forEach(entityId => {
         const entity = universe.entities.find(e => e.id === entityId);
         if (entity && entity.type === 'character' && entity.timeBound?.yearNum !== undefined) {
           // If character was created/born AFTER the event
-          if (entity.timeBound.yearNum > evt.actualTime.yearNum) {
+          if (entity.timeBound.yearNum > evtYear) {
             const id = `issue-temp-${evt.id}-${entity.id}`;
             const existing = existingMap.get(id);
             issues.push(

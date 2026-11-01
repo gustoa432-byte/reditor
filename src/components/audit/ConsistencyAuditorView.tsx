@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ConsistencyIssue, UniverseData, WorkspaceTab } from '../../types';
+import { ConsistencyIssue, UniverseData, UniverseUpdater, WorkspaceTab } from '../../types';
 import { runConsistencyCheck } from '../../utils/consistencyEngine';
 import {
   AlertTriangle,
@@ -17,7 +17,7 @@ import {
 
 interface ConsistencyAuditorViewProps {
   universe: UniverseData;
-  onUpdateUniverse: (updated: UniverseData) => void;
+  onUpdateUniverse: (updater: UniverseUpdater) => void;
   onNavigate: (tab: WorkspaceTab, targetId?: string) => void;
 }
 
@@ -49,27 +49,30 @@ export const ConsistencyAuditorView: React.FC<ConsistencyAuditorViewProps> = ({
       intentReason: intentReason
     };
 
-    // Update issue in universe consistencyIssues
-    const existingIdx = universe.consistencyIssues.findIndex(i => i.id === intentionalModalIssue.id);
-    let updatedList = [...universe.consistencyIssues];
-    if (existingIdx >= 0) {
-      updatedList[existingIdx] = updatedIssue;
-    } else {
-      updatedList.push(updatedIssue);
-    }
+    onUpdateUniverse(prev => {
+      const existingIdx = prev.consistencyIssues.findIndex(i => i.id === intentionalModalIssue.id);
+      let updatedList = [...prev.consistencyIssues];
+      if (existingIdx >= 0) {
+        updatedList[existingIdx] = updatedIssue;
+      } else {
+        updatedList.push(updatedIssue);
+      }
+      return { ...prev, consistencyIssues: updatedList };
+    });
 
-    onUpdateUniverse({ ...universe, consistencyIssues: updatedList });
     setIntentionalModalIssue(null);
     setAuthorComment('');
   };
 
   // Revert back to unresolved
   const handleRevertIntentional = (issueId: string) => {
-    const updated = universe.consistencyIssues.map(i => {
-      if (i.id !== issueId) return i;
-      return { ...i, isIntentional: false, authorComment: undefined, intentReason: undefined };
-    });
-    onUpdateUniverse({ ...universe, consistencyIssues: updated });
+    onUpdateUniverse(prev => ({
+      ...prev,
+      consistencyIssues: prev.consistencyIssues.map(i => {
+        if (i.id !== issueId) return i;
+        return { ...i, isIntentional: false, authorComment: undefined, intentReason: undefined };
+      })
+    }));
   };
 
   const reasonLabels: Record<NonNullable<ConsistencyIssue['intentReason']>, string> = {

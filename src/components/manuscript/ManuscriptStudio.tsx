@@ -4,6 +4,7 @@ import {
   ManuscriptProject,
   Scene,
   UniverseData,
+  UniverseUpdater,
   WorkspaceTab
 } from '../../types';
 import { ContextInspector } from './ContextInspector';
@@ -29,7 +30,7 @@ import {
 interface ManuscriptStudioProps {
   universe: UniverseData;
   activeSceneId?: string;
-  onUpdateUniverse: (updated: UniverseData) => void;
+  onUpdateUniverse: (updater: UniverseUpdater) => void;
   onNavigate: (tab: WorkspaceTab, targetId?: string) => void;
   onOpenAIAssistant: () => void;
 }
@@ -83,100 +84,106 @@ export const ManuscriptStudio: React.FC<ManuscriptStudioProps> = ({
   const handleUpdateText = (newText: string) => {
     if (!activeScene) return;
     const words = newText.trim().split(/\s+/).filter(Boolean).length;
-    const updatedProjects = universe.projects.map(proj => {
-      if (proj.id !== project.id) return proj;
-      return {
-        ...proj,
-        acts: proj.acts.map((act, aIdx) => {
-          if (aIdx !== currentActIndex) return act;
-          return {
-            ...act,
-            chapters: act.chapters.map((ch, cIdx) => {
-              if (cIdx !== currentChapterIndex) return ch;
-              return {
-                ...ch,
-                scenes: ch.scenes.map((sc, sIdx) => {
-                  if (sIdx !== currentSceneIndex) return sc;
-                  return {
-                    ...sc,
-                    text: newText,
-                    wordCount: words,
-                    updatedAt: new Date().toISOString()
-                  };
-                })
-              };
-            })
-          };
-        })
-      };
+    onUpdateUniverse(prev => {
+      const activeProj = prev.projects.find(p => p.id === prev.activeProjectId) || prev.projects[0];
+      const updatedProjects = prev.projects.map(proj => {
+        if (proj.id !== activeProj.id) return proj;
+        return {
+          ...proj,
+          acts: proj.acts.map((act, aIdx) => {
+            if (aIdx !== currentActIndex) return act;
+            return {
+              ...act,
+              chapters: act.chapters.map((ch, cIdx) => {
+                if (cIdx !== currentChapterIndex) return ch;
+                return {
+                  ...ch,
+                  scenes: ch.scenes.map((sc, sIdx) => {
+                    if (sIdx !== currentSceneIndex) return sc;
+                    return {
+                      ...sc,
+                      text: newText,
+                      wordCount: words,
+                      updatedAt: new Date().toISOString()
+                    };
+                  })
+                };
+              })
+            };
+          })
+        };
+      });
+      return { ...prev, projects: updatedProjects };
     });
-
-    onUpdateUniverse({ ...universe, projects: updatedProjects });
   };
 
   // Passport field updater
-  const handleUpdatePassport = (field: string, value: any) => {
+  const handleUpdatePassport = (field: keyof Scene['passport'], value: string | number | string[]) => {
     if (!activeScene) return;
-    const updatedProjects = universe.projects.map(proj => {
-      if (proj.id !== project.id) return proj;
-      return {
-        ...proj,
-        acts: proj.acts.map((act, aIdx) => {
-          if (aIdx !== currentActIndex) return act;
-          return {
-            ...act,
-            chapters: act.chapters.map((ch, cIdx) => {
-              if (cIdx !== currentChapterIndex) return ch;
-              return {
-                ...ch,
-                scenes: ch.scenes.map((sc, sIdx) => {
-                  if (sIdx !== currentSceneIndex) return sc;
-                  return {
-                    ...sc,
-                    passport: {
-                      ...sc.passport,
-                      [field]: value
-                    },
-                    updatedAt: new Date().toISOString()
-                  };
-                })
-              };
-            })
-          };
-        })
-      };
+    onUpdateUniverse(prev => {
+      const activeProj = prev.projects.find(p => p.id === prev.activeProjectId) || prev.projects[0];
+      const updatedProjects = prev.projects.map(proj => {
+        if (proj.id !== activeProj.id) return proj;
+        return {
+          ...proj,
+          acts: proj.acts.map((act, aIdx) => {
+            if (aIdx !== currentActIndex) return act;
+            return {
+              ...act,
+              chapters: act.chapters.map((ch, cIdx) => {
+                if (cIdx !== currentChapterIndex) return ch;
+                return {
+                  ...ch,
+                  scenes: ch.scenes.map((sc, sIdx) => {
+                    if (sIdx !== currentSceneIndex) return sc;
+                    return {
+                      ...sc,
+                      passport: {
+                        ...sc.passport,
+                        [field]: value
+                      },
+                      updatedAt: new Date().toISOString()
+                    };
+                  })
+                };
+              })
+            };
+          })
+        };
+      });
+      return { ...prev, projects: updatedProjects };
     });
-
-    onUpdateUniverse({ ...universe, projects: updatedProjects });
   };
 
   // Scene status updater
   const handleUpdateSceneStatus = (status: Scene['status']) => {
     if (!activeScene) return;
-    const updatedProjects = universe.projects.map(proj => {
-      if (proj.id !== project.id) return proj;
-      return {
-        ...proj,
-        acts: proj.acts.map((act, aIdx) => {
-          if (aIdx !== currentActIndex) return act;
-          return {
-            ...act,
-            chapters: act.chapters.map((ch, cIdx) => {
-              if (cIdx !== currentChapterIndex) return ch;
-              return {
-                ...ch,
-                scenes: ch.scenes.map((sc, sIdx) => {
-                  if (sIdx !== currentSceneIndex) return sc;
-                  return { ...sc, status };
-                })
-              };
-            })
-          };
-        })
-      };
+    onUpdateUniverse(prev => {
+      const activeProj = prev.projects.find(p => p.id === prev.activeProjectId) || prev.projects[0];
+      const updatedProjects = prev.projects.map(proj => {
+        if (proj.id !== activeProj.id) return proj;
+        return {
+          ...proj,
+          acts: proj.acts.map((act, aIdx) => {
+            if (aIdx !== currentActIndex) return act;
+            return {
+              ...act,
+              chapters: act.chapters.map((ch, cIdx) => {
+                if (cIdx !== currentChapterIndex) return ch;
+                return {
+                  ...ch,
+                  scenes: ch.scenes.map((sc, sIdx) => {
+                    if (sIdx !== currentSceneIndex) return sc;
+                    return { ...sc, status };
+                  })
+                };
+              })
+            };
+          })
+        };
+      });
+      return { ...prev, projects: updatedProjects };
     });
-
-    onUpdateUniverse({ ...universe, projects: updatedProjects });
   };
 
   // Storyline toggle in matrix

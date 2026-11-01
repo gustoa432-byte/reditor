@@ -3,6 +3,7 @@ import {
   DecisionLogCard,
   LabHypothesis,
   UniverseData,
+  UniverseUpdater,
   UnresolvedQuestion,
   WorkspaceTab
 } from '../../types';
@@ -23,7 +24,7 @@ import {
 interface AuthorLabViewProps {
   universe: UniverseData;
   initialSelectedId?: string;
-  onUpdateUniverse: (updated: UniverseData) => void;
+  onUpdateUniverse: (updater: UniverseUpdater) => void;
   onNavigate: (tab: WorkspaceTab, targetId?: string) => void;
 }
 
@@ -78,10 +79,10 @@ export const AuthorLabView: React.FC<AuthorLabViewProps> = ({
       updatedAt: new Date().toISOString()
     };
 
-    onUpdateUniverse({
-      ...universe,
-      hypotheses: [newHypo, ...universe.hypotheses]
-    });
+    onUpdateUniverse(prev => ({
+      ...prev,
+      hypotheses: [newHypo, ...prev.hypotheses]
+    }));
 
     setAddHypothesisModalOpen(false);
     setHypoTitle('');
@@ -110,10 +111,10 @@ export const AuthorLabView: React.FC<AuthorLabViewProps> = ({
       linkedSceneIds: []
     };
 
-    onUpdateUniverse({
-      ...universe,
-      decisions: [newDec, ...universe.decisions]
-    });
+    onUpdateUniverse(prev => ({
+      ...prev,
+      decisions: [newDec, ...prev.decisions]
+    }));
 
     setAddDecisionModalOpen(false);
     setDecTitle('');
@@ -140,10 +141,10 @@ export const AuthorLabView: React.FC<AuthorLabViewProps> = ({
       createdAt: new Date().toISOString()
     };
 
-    onUpdateUniverse({
-      ...universe,
-      questions: [newQ, ...universe.questions]
-    });
+    onUpdateUniverse(prev => ({
+      ...prev,
+      questions: [newQ, ...prev.questions]
+    }));
 
     setAddQuestionModalOpen(false);
     setQTitle('');

@@ -10,7 +10,10 @@ import {
   Send,
   Loader2,
   CheckCircle2,
-  Copy
+  AlertTriangle,
+  RotateCcw,
+  Copy,
+  Cpu
 } from 'lucide-react';
 
 interface AIAssistantViewProps {
@@ -24,32 +27,37 @@ export const AIAssistantView: React.FC<AIAssistantViewProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<'critique' | 'ripple' | 'query'>('critique');
   const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   // Scene Critique state
   const activeProject = universe.projects.find(p => p.id === universe.activeProjectId) || universe.projects[0];
   const allScenes: Scene[] = [];
   activeProject?.acts.forEach(a => a.chapters.forEach(c => c.scenes.forEach(s => allScenes.push(s))));
   const [selectedSceneId, setSelectedSceneId] = useState<string>(allScenes[0]?.id || '');
-  const [critiqueResult, setCritiqueResult] = useState<string | null>(null);
+  const [critiqueResult, setCritiqueResult] = useState<{ text: string; isFallback: boolean } | null>(null);
 
   // Ripple Effect state
   const [rippleQuestion, setRippleQuestion] = useState(
     'Что изменится в мире, если я изменю природу Осколков и сделаю их органическими паразитами Создателей?'
   );
-  const [rippleResult, setRippleResult] = useState<string | null>(null);
+  const [rippleResult, setRippleResult] = useState<{ text: string; isFallback: boolean } | null>(null);
 
   // Grounded Query state
   const [universeQuery, setUniverseQuery] = useState(
     'Что именно Фелиция помнит о Катастрофе 2450 года и какие знания от неё скрыты?'
   );
-  const [queryResult, setQueryResult] = useState<string | null>(null);
+  const [queryResult, setQueryResult] = useState<{ text: string; isFallback: boolean } | null>(null);
 
-  // Run Scene Critique
+  // Run Scene Critique with 15s timeout
   const handleRunCritique = async () => {
     const scene = allScenes.find(s => s.id === selectedSceneId);
     if (!scene) return;
     setLoading(true);
+    setErrorMsg(null);
     setCritiqueResult(null);
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
 
     try {
       const povEntity = universe.entities.find(e => e.id === scene.passport.povCharacterId);
@@ -58,22 +66,28 @@ export const AIAssistantView: React.FC<AIAssistantViewProps> = ({
       const res = await fetch('/api/ai/critique', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
         body: JSON.stringify({
           title: scene.title,
           pov: povEntity?.title || scene.passport.povCharacterId,
           goal: scene.passport.characterGoal,
           conflict: scene.passport.conflictObstacle,
+          initialState: scene.passport.initialState,
+          finalState: scene.passport.finalState,
           text: scene.text,
           characters: scene.passport.participatingCharacterIds,
           location: locEntity?.title || scene.passport.locationId,
           epoch: scene.passport.epochYear
         })
       });
+
+      if (!res.ok) throw new Error(`Ошибка сервера (${res.status})`);
       const data = await res.json();
-      setCritiqueResult(data.result);
-    } catch (err) {
-      console.error('Error running AI critique:', err);
+      setCritiqueResult({ text: data.result, isFallback: Boolean(data.isFallback) });
+    } catch (err: any) {
+      setErrorMsg(err?.name === 'AbortError' ? 'Таймаут запроса к ИИ (15 сек). Попробуйте снова.' : 'Не удалось получить ответ: ' + (err?.message || 'ошибка сети'));
     } finally {
+      clearTimeout(timeoutId);
       setLoading(false);
     }
   };
@@ -82,7 +96,11 @@ export const AIAssistantView: React.FC<AIAssistantViewProps> = ({
   const handleRunRipple = async () => {
     if (!rippleQuestion.trim()) return;
     setLoading(true);
+    setErrorMsg(null);
     setRippleResult(null);
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
 
     try {
       const summary = universe.entities
@@ -92,16 +110,20 @@ export const AIAssistantView: React.FC<AIAssistantViewProps> = ({
       const res = await fetch('/api/ai/ripple-effect', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
         body: JSON.stringify({
           question: rippleQuestion,
           universeSummary: summary
         })
       });
+
+      if (!res.ok) throw new Error(`Ошибка сервера (${res.status})`);
       const data = await res.json();
-      setRippleResult(data.result);
-    } catch (err) {
-      console.error('Error running ripple effect:', err);
+      setRippleResult({ text: data.result, isFallback: Boolean(data.isFallback) });
+    } catch (err: any) {
+      setErrorMsg(err?.name === 'AbortError' ? 'Таймаут запроса к ИИ (15 сек). Попробуйте снова.' : 'Не удалось получить ответ: ' + (err?.message || 'ошибка сети'));
     } finally {
+      clearTimeout(timeoutId);
       setLoading(false);
     }
   };
@@ -110,12 +132,17 @@ export const AIAssistantView: React.FC<AIAssistantViewProps> = ({
   const handleRunQuery = async () => {
     if (!universeQuery.trim()) return;
     setLoading(true);
+    setErrorMsg(null);
     setQueryResult(null);
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
 
     try {
       const res = await fetch('/api/ai/query', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
         body: JSON.stringify({
           query: universeQuery,
           codexCards: universe.entities.map(e => ({
@@ -127,11 +154,14 @@ export const AIAssistantView: React.FC<AIAssistantViewProps> = ({
           }))
         })
       });
+
+      if (!res.ok) throw new Error(`Ошибка сервера (${res.status})`);
       const data = await res.json();
-      setQueryResult(data.result);
-    } catch (err) {
-      console.error('Error running universe query:', err);
+      setQueryResult({ text: data.result, isFallback: Boolean(data.isFallback) });
+    } catch (err: any) {
+      setErrorMsg(err?.name === 'AbortError' ? 'Таймаут запроса к ИИ (15 сек). Попробуйте снова.' : 'Не удалось получить ответ: ' + (err?.message || 'ошибка сети'));
     } finally {
+      clearTimeout(timeoutId);
       setLoading(false);
     }
   };
@@ -155,7 +185,7 @@ export const AIAssistantView: React.FC<AIAssistantViewProps> = ({
         {/* Tab switcher */}
         <div className="flex items-center gap-1 bg-slate-900 p-1 rounded-lg border border-slate-800 text-xs">
           <button
-            onClick={() => setActiveTab('critique')}
+            onClick={() => { setActiveTab('critique'); setErrorMsg(null); }}
             className={`px-3 py-1.5 rounded font-medium transition cursor-pointer flex items-center gap-1.5 ${
               activeTab === 'critique'
                 ? 'bg-rose-950 text-rose-200 border border-rose-700/60'
@@ -166,7 +196,7 @@ export const AIAssistantView: React.FC<AIAssistantViewProps> = ({
             <span>Драматургия сцены</span>
           </button>
           <button
-            onClick={() => setActiveTab('ripple')}
+            onClick={() => { setActiveTab('ripple'); setErrorMsg(null); }}
             className={`px-3 py-1.5 rounded font-medium transition cursor-pointer flex items-center gap-1.5 ${
               activeTab === 'ripple'
                 ? 'bg-purple-950 text-purple-200 border border-purple-700/60'
@@ -177,7 +207,7 @@ export const AIAssistantView: React.FC<AIAssistantViewProps> = ({
             <span>Каскад изменений</span>
           </button>
           <button
-            onClick={() => setActiveTab('query')}
+            onClick={() => { setActiveTab('query'); setErrorMsg(null); }}
             className={`px-3 py-1.5 rounded font-medium transition cursor-pointer flex items-center gap-1.5 ${
               activeTab === 'query'
                 ? 'bg-cyan-950 text-cyan-200 border border-cyan-700/60'
@@ -189,6 +219,27 @@ export const AIAssistantView: React.FC<AIAssistantViewProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Error Banner with Retry */}
+      {errorMsg && (
+        <div className="p-4 rounded-xl bg-red-950/40 border border-red-800/60 flex items-center justify-between gap-3 text-xs text-rose-200">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+            <span>{errorMsg}</span>
+          </div>
+          <button
+            onClick={() => {
+              if (activeTab === 'critique') handleRunCritique();
+              else if (activeTab === 'ripple') handleRunRipple();
+              else handleRunQuery();
+            }}
+            className="flex items-center gap-1 px-3 py-1.5 rounded bg-rose-900/60 hover:bg-rose-800 text-rose-100 font-semibold transition cursor-pointer shrink-0"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+            <span>Повторить</span>
+          </button>
+        </div>
+      )}
 
       {/* Tab 1: Scene Dramaturgical Critique */}
       {activeTab === 'critique' && (
@@ -230,20 +281,27 @@ export const AIAssistantView: React.FC<AIAssistantViewProps> = ({
                 <div className="flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-emerald-400" />
                   <h3 className="font-serif font-bold text-slate-100 text-sm">
-                    Заключение редактора вселенной REDCROW 3000
+                    Заключение редактора вселенной
                   </h3>
+                  <span className={`text-[10px] font-mono px-2 py-0.5 rounded border ${
+                    critiqueResult.isFallback
+                      ? 'bg-slate-800 text-slate-300 border-slate-700'
+                      : 'bg-purple-950 text-purple-300 border-purple-800/40'
+                  }`}>
+                    {critiqueResult.isFallback ? 'Автономный движок' : 'Gemini AI'}
+                  </span>
                 </div>
                 <button
-                  onClick={() => navigator.clipboard.writeText(critiqueResult)}
+                  onClick={() => navigator.clipboard.writeText(critiqueResult.text)}
                   title="Копировать отчет"
-                  className="p-1 rounded text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition"
+                  className="p-1 rounded text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition cursor-pointer"
                 >
                   <Copy className="w-4 h-4" />
                 </button>
               </div>
 
               <div className="text-xs text-slate-200 font-sans leading-relaxed whitespace-pre-wrap">
-                {critiqueResult}
+                {critiqueResult.text}
               </div>
             </div>
           )}
@@ -284,17 +342,24 @@ export const AIAssistantView: React.FC<AIAssistantViewProps> = ({
                   <h3 className="font-serif font-bold text-slate-100 text-sm">
                     Карта каскадных последствий для канона
                   </h3>
+                  <span className={`text-[10px] font-mono px-2 py-0.5 rounded border ${
+                    rippleResult.isFallback
+                      ? 'bg-slate-800 text-slate-300 border-slate-700'
+                      : 'bg-purple-950 text-purple-300 border-purple-800/40'
+                  }`}>
+                    {rippleResult.isFallback ? 'Автономный движок' : 'Gemini AI'}
+                  </span>
                 </div>
                 <button
-                  onClick={() => navigator.clipboard.writeText(rippleResult)}
-                  className="p-1 rounded text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition"
+                  onClick={() => navigator.clipboard.writeText(rippleResult.text)}
+                  className="p-1 rounded text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition cursor-pointer"
                 >
                   <Copy className="w-4 h-4" />
                 </button>
               </div>
 
               <div className="text-xs text-slate-200 font-sans leading-relaxed whitespace-pre-wrap">
-                {rippleResult}
+                {rippleResult.text}
               </div>
             </div>
           )}
@@ -335,17 +400,24 @@ export const AIAssistantView: React.FC<AIAssistantViewProps> = ({
                   <h3 className="font-serif font-bold text-slate-100 text-sm">
                     Каноническая справка с цитированием
                   </h3>
+                  <span className={`text-[10px] font-mono px-2 py-0.5 rounded border ${
+                    queryResult.isFallback
+                      ? 'bg-slate-800 text-slate-300 border-slate-700'
+                      : 'bg-purple-950 text-purple-300 border-purple-800/40'
+                  }`}>
+                    {queryResult.isFallback ? 'Автономный движок' : 'Gemini AI'}
+                  </span>
                 </div>
                 <button
-                  onClick={() => navigator.clipboard.writeText(queryResult)}
-                  className="p-1 rounded text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition"
+                  onClick={() => navigator.clipboard.writeText(queryResult.text)}
+                  className="p-1 rounded text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition cursor-pointer"
                 >
                   <Copy className="w-4 h-4" />
                 </button>
               </div>
 
               <div className="text-xs text-slate-200 font-sans leading-relaxed whitespace-pre-wrap">
-                {queryResult}
+                {queryResult.text}
               </div>
             </div>
           )}

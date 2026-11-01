@@ -38,45 +38,62 @@ export const VisualMapView: React.FC<VisualMapViewProps> = ({
 
   const canvasContainerRef = useRef<HTMLDivElement>(null);
 
-  // Thematic filter presets from Section 8.2 of spec
+  // Dynamic thematic filter presets
   const themePresets = [
     { id: 'all', title: 'Все объекты' },
-    { id: 'felicia', title: 'История Фелиции' },
-    { id: 'creators', title: 'Создатели и наследие' },
-    { id: 'marcus', title: 'Маркус и Цитадель' },
-    { id: 'shards', title: 'История трёх осколков' },
-    { id: 'island', title: 'Чёрный остров' }
+    { id: 'characters', title: 'Персонажи и союзники' },
+    { id: 'locations', title: 'Локации и секторы' },
+    { id: 'artifacts', title: 'Артефакты и физика' },
+    { id: 'canon_only', title: 'Только чистый канон' }
   ];
 
-  // Filter entities according to thematic slice
+  // Dynamically filter entities according to thematic slice & graph connectivity
   const visibleEntities = useMemo(() => {
     if (selectedTheme === 'all') return universe.entities;
 
-    if (selectedTheme === 'felicia') {
-      return universe.entities.filter(
-        e => e.id === 'char-felicia' || e.id === 'loc-black-island' || e.id === 'art-three-shards' || e.id === 'civ-creators'
-      );
+    if (selectedTheme === 'canon_only') {
+      return universe.entities.filter(e => e.canonStatus === 'canon');
     }
-    if (selectedTheme === 'creators') {
-      return universe.entities.filter(
-        e => e.id === 'civ-creators' || e.id === 'tech-resonance' || e.id === 'art-three-shards' || e.id === 'loc-black-island' || e.id === 'char-felicia'
-      );
+
+    if (selectedTheme === 'characters') {
+      const charIds = new Set(universe.entities.filter(e => e.type === 'character').map(e => e.id));
+      const connectedIds = new Set<string>(charIds);
+      universe.entities.forEach(e => {
+        if (charIds.has(e.id)) {
+          e.relations.forEach(r => connectedIds.add(r.targetEntityId));
+        }
+      });
+      return universe.entities.filter(e => connectedIds.has(e.id));
     }
-    if (selectedTheme === 'marcus') {
-      return universe.entities.filter(
-        e => e.id === 'char-marcus' || e.id === 'org-citadel' || e.id === 'char-sam' || e.id === 'loc-black-island'
-      );
+
+    if (selectedTheme === 'locations') {
+      const locIds = new Set(universe.entities.filter(e => e.type === 'location').map(e => e.id));
+      const connectedIds = new Set<string>(locIds);
+      universe.entities.forEach(e => {
+        if (locIds.has(e.id)) {
+          e.relations.forEach(r => connectedIds.add(r.targetEntityId));
+        } else if (e.relations.some(r => locIds.has(r.targetEntityId))) {
+          connectedIds.add(e.id);
+        }
+      });
+      return universe.entities.filter(e => connectedIds.has(e.id));
     }
-    if (selectedTheme === 'shards') {
-      return universe.entities.filter(
-        e => e.id === 'art-three-shards' || e.id === 'char-felicia' || e.id === 'char-sam' || e.id === 'char-marcus' || e.id === 'loc-black-island'
+
+    if (selectedTheme === 'artifacts') {
+      const artIds = new Set(
+        universe.entities.filter(e => e.type === 'artifact' || e.type === 'technology').map(e => e.id)
       );
+      const connectedIds = new Set<string>(artIds);
+      universe.entities.forEach(e => {
+        if (artIds.has(e.id)) {
+          e.relations.forEach(r => connectedIds.add(r.targetEntityId));
+        } else if (e.relations.some(r => artIds.has(r.targetEntityId))) {
+          connectedIds.add(e.id);
+        }
+      });
+      return universe.entities.filter(e => connectedIds.has(e.id));
     }
-    if (selectedTheme === 'island') {
-      return universe.entities.filter(
-        e => e.id === 'loc-black-island' || e.id === 'char-felicia' || e.id === 'civ-creators' || e.id === 'art-three-shards'
-      );
-    }
+
     return universe.entities;
   }, [universe.entities, selectedTheme]);
 
